@@ -178,7 +178,7 @@
       align-items: center;
     }
 
-    input, button {
+    input, select, button {
       min-height: 43px;
       border: 1px solid rgba(17, 23, 20, 0.18);
       border-radius: 8px;
@@ -189,7 +189,7 @@
       outline: none;
     }
 
-    input:focus {
+    input:focus, select:focus {
       border-color: rgba(35, 89, 214, 0.66);
       box-shadow: 0 0 0 3px rgba(35, 89, 214, 0.14);
     }
@@ -439,8 +439,8 @@
   <div class="app">
     <aside>
       <header class="brand">
-        <h1>Densidad de población municipal</h1>
-        <p class="subtitle">España · habitantes por km2 · datos municipales más recientes disponibles en INE: 2025.</p>
+        <h1>Densidad municipal europea</h1>
+        <p class="subtitle">Europa UE/EFTA · unidades LAU · densidad normalizada a partir de Eurostat/GISCO 2024, INE e INSEE.</p>
       </header>
 
       <section class="dashboard">
@@ -448,9 +448,9 @@
           <span class="label">Estado</span>
           <div id="status" aria-live="polite">Preparando mapa y descargando datos oficiales...</div>
           <div class="metric-grid">
-            <div class="metric"><b id="m-munis">-</b><span>municipios</span></div>
+            <div class="metric"><b id="m-munis">-</b><span>unidades LAU</span></div>
             <div class="metric"><b id="m-max">-</b><span>max. hab/km2</span></div>
-            <div class="metric"><b id="m-year">-</b><span>año población</span></div>
+            <div class="metric"><b id="m-year">-</b><span>países</span></div>
             <div class="metric"><b id="m-total">-</b><span>población total</span></div>
           </div>
         </div>
@@ -465,10 +465,18 @@
         <div class="panel">
           <label class="label" for="searchBox">Buscar municipio</label>
           <div class="search-row">
-            <input id="searchBox" placeholder="Ej. Madrid, Barcelona, Mislata..." autocomplete="off" />
+            <input id="searchBox" placeholder="Ej. Madrid, Paris, Berlin..." autocomplete="off" />
             <button id="searchBtn" title="Centrar municipio" aria-label="Centrar municipio">⌕</button>
           </div>
           <p id="searchHint" class="hint"></p>
+        </div>
+
+        <div class="panel">
+          <label class="label" for="countryFilter">Filtrar país</label>
+          <select id="countryFilter">
+            <option value="all">Toda Europa UE/EFTA</option>
+          </select>
+          <p class="hint">El filtro reduce las capas pesadas y ayuda a comparar países concretos.</p>
         </div>
 
         <div class="panel modes-panel">
@@ -492,10 +500,10 @@
 
       <section class="panel sources">
         <span class="label">Fuentes</span>
-        <p>INE: tabla 68065, <em>Población según municipio y sexo</em>, Censo anual de población 2021-2025.</p>
-        <p>IGN/CNIG: listado geográfico de municipios con superficie y enlace cartográfico de centro municipal.</p>
-        <p>Delimitaciones: TopoJSON municipal de es-atlas, generado desde datos IGN. Mapa base: OpenStreetMap y CARTO raster tiles de alta densidad.</p>
-        <p><a href="https://www.ine.es/jaxiT3/Tabla.htm?t=68065" target="_blank" rel="noreferrer">Ver tabla INE</a> · <a href="https://www.ign.es/web/ane-datos-geograficos" target="_blank" rel="noreferrer">Ver datos IGN</a></p>
+        <p>Eurostat/GISCO: LAU 2024, límites municipales europeos, población, área y densidad cuando están disponibles.</p>
+        <p>Suplementos: INE 2025 para España e INSEE 2021 para Francia. Islandia queda sin población municipal en esta versión.</p>
+        <p>Mapa base: OpenStreetMap y CARTO raster tiles de alta densidad.</p>
+        <p><a href="https://gisco-services.ec.europa.eu/distribution/v2/lau/" target="_blank" rel="noreferrer">Ver GISCO LAU</a> · <a href="https://www.ine.es/jaxiT3/Tabla.htm?t=68065" target="_blank" rel="noreferrer">INE</a> · <a href="https://www.insee.fr/fr/statistiques/7739582" target="_blank" rel="noreferrer">INSEE</a></p>
       </section>
     </aside>
 
@@ -507,7 +515,7 @@
       </div>
       <div id="failbox" class="failbox">
         <h2>No se pudieron cargar los datos externos</h2>
-        <p>La web usa datos municipales reales del INE y del IGN. Si alguna fuente externa cambia de estructura o se bloquea, el mapa no puede calcular densidades.</p>
+        <p>La web usa un asset local generado desde Eurostat/GISCO, INE e INSEE. Si el archivo no se descarga completo, el mapa no puede calcular densidades.</p>
         <p>Prueba local: ejecuta <code>python -m http.server 8000</code> en esta carpeta y abre <code>http://localhost:8000</code>.</p>
       </div>
     </main>
@@ -517,11 +525,27 @@
 const INE_CSV = "https://www.ine.es/jaxiT3/files/t/csv_bdsc/68065.csv";
 const IGN_XLSX = "https://www.ign.es/resources/ane/Informacion_Geografica_Destacada/IGN_INFOGEO_MUNICIPIOS.xlsx";
 const MUNICIPAL_TOPOJSON = "https://unpkg.com/es-atlas@0.6.0/es/municipalities.json";
+const EUROPE_LAU_ASSET = "data/europe_lau_2024.min.json";
+
+const COUNTRY_NAMES = {
+  AT: "Austria", BE: "Bélgica", BG: "Bulgaria", CH: "Suiza", CY: "Chipre",
+  CZ: "Chequia", DE: "Alemania", DK: "Dinamarca", EE: "Estonia", EL: "Grecia",
+  ES: "España", FI: "Finlandia", FR: "Francia", HR: "Croacia", HU: "Hungría",
+  IE: "Irlanda", IS: "Islandia", IT: "Italia", LI: "Liechtenstein", LT: "Lituania",
+  LU: "Luxemburgo", LV: "Letonia", MT: "Malta", NL: "Países Bajos", NO: "Noruega",
+  PL: "Polonia", PT: "Portugal", RO: "Rumanía", SE: "Suecia", SI: "Eslovenia", SK: "Eslovaquia"
+};
+
+const SEARCH_ALIASES = {
+  berlin: "DE_11000000",
+  lisboa: "PT_110665",
+  lisbon: "PT_110665"
+};
 
 const MODE_HINTS = {
-  points: "Puntos municipales coloreados por densidad.",
-  choropleth: "Municipios reales coloreados por densidad, con delimitaciones visibles.",
-  heatmap: "Superficie continua estimada desde los centros municipales, sin círculos.",
+  points: "Puntos LAU coloreados por densidad.",
+  choropleth: "Unidades LAU coloreadas por densidad, con delimitaciones visibles.",
+  heatmap: "Superficie continua estimada desde centroides LAU, sin círculos.",
   cubes: "Columnas cuadradas con altura logarítmica normalizada por densidad.",
   grid: "Celdas agregadas para leer patrones territoriales sin ruido municipal.",
   bivariate: "Densidad en color y población total en tamaño/borde."
@@ -565,9 +589,9 @@ const MAP_STYLE = {
 const map = new maplibregl.Map({
   container: "map",
   style: MAP_STYLE,
-  center: [-3.7, 40.1],
-  zoom: 5.25,
-  minZoom: 4.2,
+  center: [9.5, 48.5],
+  zoom: 3.45,
+  minZoom: 2.2,
   maxZoom: 12,
   pitch: 36,
   bearing: -12,
@@ -580,12 +604,16 @@ map.addControl(new maplibregl.AttributionControl({ compact: true }), "bottom-rig
 
 const mapReady = new Promise(resolve => map.on("load", resolve));
 let municipalities = [];
+let allMunicipalities = [];
+let polygonFeatures = [];
+let assetMetadata = {};
 let municipalitiesByCode = new Map();
 let selectedCode = "";
 let hoveredCode = "";
 let maxDensity = 1;
 let maxPopulation = 1;
 let activeMode = "points";
+let activeCountry = "all";
 let polygonDataPromise = null;
 
 function setStatus(html) {
@@ -770,7 +798,7 @@ function buildDataset(popData, geoData) {
 function toGeoJson(data) {
   return {
     type: "FeatureCollection",
-    features: data.map(m => ({
+    features: data.filter(m => m.hasData).map(m => ({
       type: "Feature",
       id: m.code,
       geometry: { type: "Point", coordinates: [m.lon, m.lat] },
@@ -786,11 +814,12 @@ function toGeoJson(data) {
 function popupHtml(m) {
   return `
     <div class="popup-title">${escapeHtml(m.name)}</div>
-    <div class="popup-row"><span>Provincia:</span> ${escapeHtml(m.province || "-")}</div>
+    <div class="popup-row"><span>País:</span> ${escapeHtml(m.countryName || m.province || "-")}</div>
     <div class="popup-row"><span>Densidad:</span> ${fmt(m.density, 1)} hab/km2</div>
-    <div class="popup-row"><span>Poblacion:</span> ${fmt(m.population)}</div>
+    <div class="popup-row"><span>Población:</span> ${fmt(m.population)}</div>
     <div class="popup-row"><span>Superficie:</span> ${fmt(m.area, 2)} km2</div>
-    <div class="popup-row"><span>Codigo INE:</span> ${escapeHtml(m.code)}</div>
+    <div class="popup-row"><span>Código LAU:</span> ${escapeHtml(m.code)}</div>
+    <div class="popup-row"><span>Fuente:</span> ${escapeHtml(m.source || "-")}</div>
   `;
 }
 
@@ -1206,14 +1235,223 @@ function setupModes() {
   });
 }
 
+function coordBounds(geometry, bounds = { minLon: Infinity, minLat: Infinity, maxLon: -Infinity, maxLat: -Infinity }) {
+  if (!geometry) return bounds;
+  const scan = coords => {
+    if (typeof coords[0] === "number") {
+      bounds.minLon = Math.min(bounds.minLon, coords[0]);
+      bounds.maxLon = Math.max(bounds.maxLon, coords[0]);
+      bounds.minLat = Math.min(bounds.minLat, coords[1]);
+      bounds.maxLat = Math.max(bounds.maxLat, coords[1]);
+      return;
+    }
+    coords.forEach(scan);
+  };
+  scan(geometry.coordinates);
+  return bounds;
+}
+
+function centerFromGeometry(geometry) {
+  const b = coordBounds(geometry);
+  if (!Number.isFinite(b.minLon)) return { lon: 0, lat: 0 };
+  return { lon: (b.minLon + b.maxLon) / 2, lat: (b.minLat + b.maxLat) / 2 };
+}
+
+async function loadEuropeAsset() {
+  const res = await fetch(EUROPE_LAU_ASSET);
+  if (!res.ok) throw new Error(`HTTP ${res.status} al cargar ${EUROPE_LAU_ASSET}`);
+  const topo = await res.json();
+  assetMetadata = topo.metadata || {};
+  const geo = topojson.feature(topo, topo.objects.lau);
+  polygonFeatures = geo.features;
+  allMunicipalities = polygonFeatures.map(feature => {
+    const p = feature.properties || {};
+    const center = centerFromGeometry(feature.geometry);
+    const m = {
+      code: p.code || feature.id,
+      name: p.name || feature.id,
+      country: p.country || "",
+      countryName: COUNTRY_NAMES[p.country] || p.country || "",
+      province: COUNTRY_NAMES[p.country] || p.country || "-",
+      lat: center.lat,
+      lon: center.lon,
+      area: Number(p.area) || 0,
+      population: Number(p.population) || 0,
+      density: Number(p.density) || 0,
+      period: p.year || 2024,
+      source: p.source || "Eurostat/GISCO LAU 2024",
+      hasData: Boolean(p.hasData && Number(p.population) > 0 && Number(p.density) > 0)
+    };
+    feature.id = m.code;
+    feature.properties = { ...p, ...m, densityScore: 0, populationScore: 0 };
+    return m;
+  }).filter(m => m.code);
+  allMunicipalities.sort((a, b) => b.density - a.density);
+}
+
+function applyFilteredData(country = "all") {
+  activeCountry = country;
+  municipalities = country === "all" ? [...allMunicipalities] : allMunicipalities.filter(m => m.country === country);
+  maxDensity = Math.max(1, ...municipalities.filter(m => m.hasData).map(m => m.density));
+  maxPopulation = Math.max(1, ...municipalities.filter(m => m.hasData).map(m => m.population));
+  municipalitiesByCode = new Map(municipalities.map(m => [m.code, m]));
+  for (const m of municipalities) {
+    m.densityScore = m.hasData ? densityScore(m.density) : 0;
+    m.populationScore = m.hasData ? populationScore(m.population) : 0;
+  }
+  for (const feature of polygonFeatures) {
+    const m = municipalitiesByCode.get(feature.properties.code) || allMunicipalities.find(item => item.code === feature.properties.code);
+    if (!m) continue;
+    feature.properties = { ...feature.properties, ...m, densityScore: m.densityScore || 0, populationScore: m.populationScore || 0 };
+  }
+}
+
+function currentPolygonData() {
+  const allowed = new Set(municipalities.map(m => m.code));
+  return { type: "FeatureCollection", features: polygonFeatures.filter(f => allowed.has(f.properties.code)) };
+}
+
+function refreshVisibleSources() {
+  if (map.getSource("municipalities")) map.getSource("municipalities").setData(toGeoJson(municipalities));
+  if (map.getSource("municipal-polygons")) map.getSource("municipal-polygons").setData(currentPolygonData());
+  if (map.getSource("municipal-cubes")) map.getSource("municipal-cubes").setData(buildCubeGeoJson(municipalities.filter(m => m.hasData)));
+  if (map.getSource("density-grid")) map.getSource("density-grid").setData(buildGridGeoJson(municipalities.filter(m => m.hasData)));
+}
+
+async function loadMunicipalPolygons() {
+  return currentPolygonData();
+}
+
+function ensureCubeLayers() {
+  const cubeData = buildCubeGeoJson(municipalities.filter(m => m.hasData));
+  if (map.getSource("municipal-cubes")) {
+    map.getSource("municipal-cubes").setData(cubeData);
+    return;
+  }
+  map.addSource("municipal-cubes", { type: "geojson", data: cubeData, promoteId: "code" });
+  map.addLayer({
+    id: "municipal-cubes",
+    type: "fill-extrusion",
+    source: "municipal-cubes",
+    layout: { visibility: "none" },
+    paint: {
+      "fill-extrusion-color": colorExpression(),
+      "fill-extrusion-height": ["get", "height"],
+      "fill-extrusion-base": 0,
+      "fill-extrusion-opacity": 0.78
+    }
+  });
+  registerPopupLayer("municipal-cubes");
+}
+
+function ensureGridLayers() {
+  const gridData = buildGridGeoJson(municipalities.filter(m => m.hasData));
+  if (map.getSource("density-grid")) {
+    map.getSource("density-grid").setData(gridData);
+    return;
+  }
+  map.addSource("density-grid", { type: "geojson", data: gridData });
+  map.addLayer({
+    id: "grid-fill",
+    type: "fill",
+    source: "density-grid",
+    layout: { visibility: "none" },
+    paint: {
+      "fill-color": colorExpression(),
+      "fill-opacity": ["interpolate", ["linear"], ["get", "densityScore"], 0, 0.18, 1, 0.78]
+    }
+  }, "municipal-heat");
+  map.addLayer({
+    id: "grid-line",
+    type: "line",
+    source: "density-grid",
+    layout: { visibility: "none" },
+    paint: {
+      "line-color": "rgba(17, 23, 20, 0.28)",
+      "line-width": 0.55
+    }
+  });
+  registerPopupLayer("grid-fill");
+}
+
+function setupCountryFilter() {
+  const select = document.getElementById("countryFilter");
+  const countries = [...new Set(allMunicipalities.map(m => m.country))].sort();
+  select.innerHTML = `<option value="all">Toda Europa UE/EFTA</option>` + countries.map(code =>
+    `<option value="${escapeHtml(code)}">${escapeHtml(COUNTRY_NAMES[code] || code)} (${escapeHtml(code)})</option>`
+  ).join("");
+  select.addEventListener("change", () => {
+    applyFilteredData(select.value);
+    refreshVisibleSources();
+    updateUI(municipalities);
+    setMode(activeMode).catch(console.error);
+  });
+}
+
+async function ensurePolygonLayers() {
+  const polygonData = currentPolygonData();
+  if (map.getSource("municipal-polygons")) {
+    map.getSource("municipal-polygons").setData(polygonData);
+    return;
+  }
+
+  map.addSource("municipal-polygons", { type: "geojson", data: polygonData, promoteId: "code" });
+  map.addLayer({
+    id: "municipal-fill",
+    type: "fill",
+    source: "municipal-polygons",
+    layout: { visibility: "none" },
+    paint: {
+      "fill-color": ["case", ["boolean", ["get", "hasData"], false], colorExpression(), "#d8dddc"],
+      "fill-opacity": ["case", ["boolean", ["feature-state", "hover"], false], 0.86, 0.62]
+    }
+  }, "municipal-heat");
+  map.addLayer({
+    id: "municipal-borders",
+    type: "line",
+    source: "municipal-polygons",
+    layout: { visibility: "none" },
+    paint: {
+      "line-color": "rgba(17, 23, 20, 0.42)",
+      "line-width": ["interpolate", ["linear"], ["zoom"], 3, 0.18, 9, 0.85, 12, 1.6]
+    }
+  });
+  map.addLayer({
+    id: "municipal-selected-fill",
+    type: "line",
+    source: "municipal-polygons",
+    layout: { visibility: "none" },
+    filter: ["==", ["get", "code"], ""],
+    paint: { "line-color": "#2359d6", "line-width": 3 }
+  });
+  map.on("mousemove", "municipal-fill", e => {
+    const feature = e.features?.[0];
+    if (!feature) return;
+    const code = feature.properties.code;
+    if (hoveredCode && hoveredCode !== code && map.getSource("municipal-polygons")) {
+      map.setFeatureState({ source: "municipal-polygons", id: hoveredCode }, { hover: false });
+    }
+    hoveredCode = code;
+    map.setFeatureState({ source: "municipal-polygons", id: code }, { hover: true });
+  });
+  map.on("mouseleave", "municipal-fill", () => {
+    map.getCanvas().style.cursor = "";
+    if (hoveredCode && map.getSource("municipal-polygons")) {
+      map.setFeatureState({ source: "municipal-polygons", id: hoveredCode }, { hover: false });
+      hoveredCode = "";
+    }
+  });
+  registerPopupLayer("municipal-fill");
+}
+
 function updateUI(data, period) {
   const totalPop = data.reduce((sum, d) => sum + d.population, 0);
   document.getElementById("m-munis").textContent = fmt(data.length);
   document.getElementById("m-max").textContent = fmt(maxDensity, 0);
-  document.getElementById("m-year").textContent = period;
+  document.getElementById("m-year").textContent = fmt(new Set(data.map(d => d.country)).size);
   document.getElementById("m-total").textContent = fmt(totalPop);
 
-  document.getElementById("topList").innerHTML = data.slice(0, 10).map(d =>
+  document.getElementById("topList").innerHTML = data.filter(d => d.hasData).slice(0, 10).map(d =>
     `<li data-code="${escapeHtml(d.code)}"><strong>${escapeHtml(d.name)}</strong>: ${fmt(d.density, 0)} hab/km2</li>`
   ).join("");
 
@@ -1224,7 +1462,7 @@ function updateUI(data, period) {
     });
   });
 
-  setStatus(`Datos cargados. <strong>${fmt(data.length)}</strong> municipios cruzados con coordenadas, superficie y población.`);
+  setStatus(`Datos cargados. <strong>${fmt(data.length)}</strong> unidades LAU en ${fmt(new Set(data.map(d => d.country)).size)} países.`);
 }
 
 function selectMunicipality(m, options = {}) {
@@ -1258,9 +1496,11 @@ function setupSearch() {
   const go = () => {
     const q = searchText(input.value.trim());
     if (!q) return;
-    const exact = municipalities.find(d => searchText(d.name) === q);
-    const partial = municipalities.find(d => searchText(d.name).includes(q));
-    const m = exact || partial;
+    const pool = activeCountry === "all" ? allMunicipalities : municipalities;
+    const alias = SEARCH_ALIASES[q] ? allMunicipalities.find(d => d.code === SEARCH_ALIASES[q]) : null;
+    const exact = pool.find(d => searchText(d.name) === q);
+    const partial = pool.find(d => searchText(d.name).includes(q));
+    const m = alias || exact || partial;
     if (!m) {
       hint.textContent = "No encuentro ese municipio en el dataset cargado.";
       return;
@@ -1275,24 +1515,19 @@ function setupSearch() {
 
 (async function init() {
   try {
-    setStatus("Descargando población municipal del INE...");
-    const popData = await loadINEPopulation();
-    setStatus("Descargando coordenadas y superficies municipales del IGN...");
-    const geoData = await loadIGNMunicipalInfo();
-    municipalities = buildDataset(popData, geoData);
-    if (municipalities.length < 7000) {
-      throw new Error(`Solo se han podido cruzar ${municipalities.length} municipios; revisa columnas de IGN/INE o CORS.`);
+    setStatus("Cargando asset europeo LAU 2024...");
+    await loadEuropeAsset();
+    if (allMunicipalities.length < 90000) {
+      throw new Error(`El asset europeo solo contiene ${allMunicipalities.length} unidades LAU.`);
     }
-
-    maxDensity = Math.max(...municipalities.map(d => d.density));
-    maxPopulation = Math.max(...municipalities.map(d => d.population));
-    municipalitiesByCode = new Map(municipalities.map(m => [m.code, m]));
+    applyFilteredData("all");
     await mapReady;
     try { map.setProjection({ type: "globe" }); } catch (err) { console.warn("Globe projection unavailable", err); }
     drawCoreLayers(municipalities);
-    updateUI(municipalities, popData.period);
+    updateUI(municipalities);
     setupSearch();
     setupModes();
+    setupCountryFilter();
   } catch (err) {
     console.error(err);
     setStatus(`<strong>Error:</strong> ${escapeHtml(err.message)}`);
