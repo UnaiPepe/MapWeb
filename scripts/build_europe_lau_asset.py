@@ -3,6 +3,8 @@ from __future__ import annotations
 import csv
 import json
 import math
+import subprocess
+import sys
 from io import BytesIO, StringIO, TextIOWrapper
 from pathlib import Path
 from urllib.request import urlopen
@@ -190,6 +192,11 @@ def main() -> None:
     out_path.write_text(json.dumps(asset, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
     print(json.dumps(asset["metadata"], ensure_ascii=False, indent=2))
     print(f"Wrote {out_path} ({out_path.stat().st_size / 1024 / 1024:.2f} MiB)")
+    partitioner = root / "scripts" / "partition_europe_lau_asset.js"
+    if partitioner.exists():
+        subprocess.run(["node", str(partitioner)], cwd=root, check=True)
+    else:
+        print("Partitioner not found; skipped chunk generation", file=sys.stderr)
 
 
 if __name__ == "__main__":

@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Densidad municipal europea</title>
+  <link rel="preconnect" href="https://unpkg.com">
+  <link rel="preconnect" href="https://a.basemaps.cartocdn.com">
+  <link rel="preconnect" href="https://b.basemaps.cartocdn.com">
+  <link rel="preconnect" href="https://c.basemaps.cartocdn.com">
+  <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@5.6.2/dist/maplibre-gl.css">
+  <link rel="stylesheet" href="../src/core/app.css">
+  <script src="https://unpkg.com/maplibre-gl@5.6.2/dist/maplibre-gl.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/topojson-client@3/dist/topojson-client.min.js"></script>
+</head>
+<body>
+  <div id="app"></div>
+  <script type="module">
+    import { createGeoAnalyticsApp } from "../src/core/app.js";
+    import { densityEuropeProject } from "../src/projects/density-europe.js";
+    createGeoAnalyticsApp(densityEuropeProject, { root: "#app" }).init().catch(console.error);
+  </script>
+</body>
+</html>
