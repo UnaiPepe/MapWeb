@@ -3,85 +3,155 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Mapa de densidad de población municipal — España</title>
+  <title>Mapa de densidad de población municipal - España</title>
   <link rel="preconnect" href="https://unpkg.com">
   <link rel="preconnect" href="https://cdn.jsdelivr.net">
-  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIINfQ15BsS6/0Y96hF5m5VY5nG5N5QOqI=" crossorigin="" />
-  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+  <link rel="preconnect" href="https://a.basemaps.cartocdn.com">
+  <link rel="preconnect" href="https://b.basemaps.cartocdn.com">
+  <link rel="preconnect" href="https://c.basemaps.cartocdn.com">
+  <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@5.6.2/dist/maplibre-gl.css">
+  <script src="https://unpkg.com/maplibre-gl@5.6.2/dist/maplibre-gl.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <style>
     :root {
-      --bg: #ffffff;
-      --ink: #111111;
-      --muted: #666666;
-      --line: #111111;
-      --panel: rgba(255,255,255,0.94);
-      --panel-border: rgba(0,0,0,0.14);
-      --red: #e60000;
-      --yellow: #ffd500;
+      --bg: #f8faf8;
+      --ink: #111714;
+      --muted: #5f6863;
+      --line: rgba(17, 23, 20, 0.14);
+      --panel: rgba(255, 255, 255, 0.9);
+      --panel-strong: #ffffff;
+      --green: #0f8f66;
+      --blue: #2359d6;
+      --red: #c71f28;
+      --yellow: #ffd857;
+      --shadow: 0 18px 55px rgba(28, 41, 35, 0.16);
     }
+
     * { box-sizing: border-box; }
+    html, body { height: 100%; }
     body {
       margin: 0;
       background: var(--bg);
       color: var(--ink);
       font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      overflow: hidden;
     }
+
     .app {
       display: grid;
-      grid-template-columns: minmax(280px, 360px) 1fr;
-      min-height: 100vh;
-      background: #fff;
+      grid-template-columns: minmax(300px, 390px) minmax(0, 1fr);
+      min-height: 100dvh;
+      width: 100%;
     }
+
     aside {
-      border-right: 1px solid var(--panel-border);
-      padding: 24px 22px;
-      background: #fff;
-      z-index: 800;
+      position: relative;
+      z-index: 3;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+      max-height: 100dvh;
       overflow: auto;
-      max-height: 100vh;
+      padding: 22px;
+      border-right: 1px solid var(--line);
+      background: linear-gradient(180deg, rgba(255,255,255,0.98), rgba(247,250,248,0.94));
+      box-shadow: 10px 0 40px rgba(20, 28, 24, 0.08);
     }
+
+    .brand {
+      padding: 4px 0 6px;
+    }
+
     h1 {
-      font-size: 22px;
-      line-height: 1.08;
       margin: 0 0 10px;
-      letter-spacing: -0.02em;
+      font-size: clamp(24px, 3vw, 34px);
+      line-height: 1.02;
+      letter-spacing: 0;
     }
+
     .subtitle {
-      margin: 0 0 18px;
+      margin: 0;
+      max-width: 42ch;
       color: var(--muted);
       font-size: 13px;
       line-height: 1.45;
     }
-    .card {
-      border: 1px solid var(--panel-border);
-      border-radius: 16px;
+
+    .panel {
+      border: 1px solid var(--line);
+      border-radius: 8px;
       padding: 14px;
-      margin: 14px 0;
       background: var(--panel);
+      box-shadow: 0 1px 0 rgba(255,255,255,0.7) inset;
+      backdrop-filter: blur(16px);
+      transition: transform 180ms ease, border-color 180ms ease, box-shadow 180ms ease;
     }
+
+    .panel:hover {
+      transform: translateY(-1px);
+      border-color: rgba(15, 143, 102, 0.3);
+      box-shadow: 0 12px 28px rgba(28, 41, 35, 0.09);
+    }
+
     .label {
       display: block;
-      font-size: 12px;
-      font-weight: 700;
-      text-transform: uppercase;
-      letter-spacing: 0.06em;
       margin-bottom: 8px;
+      color: #17201b;
+      font-size: 12px;
+      font-weight: 800;
+      letter-spacing: 0;
+      text-transform: uppercase;
     }
+
     #status {
+      min-height: 38px;
+      color: #2d3530;
       font-size: 13px;
       line-height: 1.45;
     }
+
     #status strong { color: var(--red); }
+
+    .metric-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 10px;
+      margin-top: 12px;
+    }
+
+    .metric {
+      min-width: 0;
+      border: 1px solid rgba(17, 23, 20, 0.1);
+      border-radius: 8px;
+      padding: 10px;
+      background: rgba(255,255,255,0.68);
+    }
+
+    .metric b {
+      display: block;
+      overflow-wrap: anywhere;
+      font-size: clamp(17px, 2.2vw, 22px);
+      line-height: 1.1;
+    }
+
+    .metric span {
+      display: block;
+      margin-top: 3px;
+      color: var(--muted);
+      font-size: 11px;
+      line-height: 1.25;
+    }
+
     .legend-bar {
       width: 100%;
-      height: 16px;
-      border-radius: 999px;
-      border: 1px solid rgba(0,0,0,0.25);
-      background: linear-gradient(90deg, #ffffff 0%, #fff3b0 32%, #ffd500 50%, #ff7a00 70%, #e60000 100%);
+      height: 14px;
       margin: 10px 0 8px;
+      border: 1px solid rgba(17, 23, 20, 0.22);
+      border-radius: 999px;
+      background: linear-gradient(90deg, #f7fff6 0%, #d5f7a6 24%, #ffd857 50%, #f17745 72%, #c71f28 100%);
     }
+
     .legend-labels {
       display: flex;
       justify-content: space-between;
@@ -89,156 +159,285 @@
       color: var(--muted);
       font-size: 11px;
     }
-    .metric-grid {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 10px;
-      margin-top: 8px;
-    }
-    .metric {
-      border: 1px solid rgba(0,0,0,0.10);
-      border-radius: 12px;
-      padding: 10px;
-    }
-    .metric b {
-      display: block;
-      font-size: 18px;
-      line-height: 1.1;
-    }
-    .metric span {
-      color: var(--muted);
-      font-size: 11px;
-    }
-    input, select, button {
-      width: 100%;
-      border: 1px solid rgba(0,0,0,0.2);
-      border-radius: 12px;
-      padding: 10px 12px;
-      font: inherit;
-      background: #fff;
-      color: #111;
-    }
-    button {
-      cursor: pointer;
-      font-weight: 700;
-      margin-top: 10px;
-    }
-    button:hover { background: #f7f7f7; }
+
     .note, .sources, .hint {
       color: var(--muted);
       font-size: 12px;
       line-height: 1.45;
     }
-    .sources a { color: #111; text-decoration-thickness: 1px; }
+
+    .note { margin: 10px 0 0; }
+    .sources p { margin: 7px 0; }
+    .sources a { color: #123b8f; text-decoration-thickness: 1px; }
+
+    .search-row {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 8px;
+      align-items: center;
+    }
+
+    input, button {
+      min-height: 43px;
+      border: 1px solid rgba(17, 23, 20, 0.18);
+      border-radius: 8px;
+      padding: 10px 12px;
+      background: #fff;
+      color: #111714;
+      font: inherit;
+      outline: none;
+    }
+
+    input:focus {
+      border-color: rgba(35, 89, 214, 0.66);
+      box-shadow: 0 0 0 3px rgba(35, 89, 214, 0.14);
+    }
+
+    button {
+      width: 44px;
+      padding: 0;
+      cursor: pointer;
+      font-weight: 800;
+      transition: transform 160ms ease, background 160ms ease, border-color 160ms ease;
+    }
+
+    button:hover {
+      transform: translateY(-1px);
+      border-color: rgba(15, 143, 102, 0.4);
+      background: #eef9f4;
+    }
+
     #topList {
       margin: 8px 0 0;
-      padding-left: 18px;
+      padding-left: 20px;
       font-size: 12px;
-      line-height: 1.55;
+      line-height: 1.5;
     }
-    #topList li { margin-bottom: 4px; }
-    main { position: relative; min-height: 100vh; }
+
+    #topList li {
+      padding: 3px 0;
+      cursor: pointer;
+      transition: color 160ms ease, transform 160ms ease;
+    }
+
+    #topList li:hover {
+      color: var(--blue);
+      transform: translateX(2px);
+    }
+
+    main {
+      position: relative;
+      min-height: 100dvh;
+      overflow: hidden;
+      background:
+        radial-gradient(circle at 75% 16%, rgba(15, 143, 102, 0.16), transparent 32%),
+        linear-gradient(135deg, #eef4f0, #ffffff 55%, #eef4ff);
+    }
+
     #map {
       position: absolute;
       inset: 0;
-      background: #fff;
     }
-    .leaflet-container {
-      background: #fff !important;
-      font-family: inherit;
+
+    .maplibregl-canvas {
+      outline: none;
     }
-    .leaflet-control-attribution {
-      font-size: 10px !important;
-      background: rgba(255,255,255,0.92) !important;
-      color: #333 !important;
+
+    .maplibregl-ctrl-group {
+      border-radius: 8px;
+      overflow: hidden;
+      box-shadow: 0 10px 30px rgba(20, 28, 24, 0.16);
     }
-    .leaflet-popup-content-wrapper {
-      border-radius: 14px;
-      box-shadow: 0 8px 24px rgba(0,0,0,0.18);
+
+    .maplibregl-popup {
+      max-width: min(330px, calc(100vw - 32px)) !important;
     }
-    .popup-title { font-weight: 800; font-size: 14px; margin-bottom: 6px; }
-    .popup-row { font-size: 12px; margin: 3px 0; color: #222; }
-    .popup-row span { color: #666; }
-    .boundary-pane {
-      filter: grayscale(1) brightness(0) contrast(1000%);
-      opacity: 0.62;
-      mix-blend-mode: multiply;
+
+    .maplibregl-popup-content {
+      border-radius: 8px;
+      padding: 14px;
+      box-shadow: var(--shadow);
+      font: inherit;
     }
+
+    .popup-title {
+      margin-bottom: 8px;
+      font-size: 15px;
+      font-weight: 850;
+    }
+
+    .popup-row {
+      margin: 4px 0;
+      color: #222c27;
+      font-size: 12px;
+    }
+
+    .popup-row span {
+      color: #657169;
+    }
+
+    .map-tools {
+      position: absolute;
+      right: 16px;
+      bottom: 32px;
+      z-index: 2;
+      display: flex;
+      gap: 8px;
+    }
+
+    .tool-chip {
+      border: 1px solid rgba(17, 23, 20, 0.14);
+      border-radius: 8px;
+      padding: 8px 10px;
+      background: rgba(255,255,255,0.86);
+      box-shadow: 0 10px 30px rgba(20, 28, 24, 0.12);
+      color: #1d2822;
+      font-size: 12px;
+      backdrop-filter: blur(14px);
+    }
+
     .failbox {
       display: none;
       position: absolute;
-      left: 50%; top: 50%; transform: translate(-50%, -50%);
+      left: 50%;
+      top: 50%;
+      z-index: 5;
       width: min(620px, calc(100% - 32px));
-      background: #fff;
-      border: 1px solid rgba(0,0,0,0.2);
-      border-radius: 18px;
+      transform: translate(-50%, -50%);
+      border: 1px solid rgba(17, 23, 20, 0.18);
+      border-radius: 8px;
       padding: 20px;
-      z-index: 1000;
-      box-shadow: 0 12px 40px rgba(0,0,0,0.14);
+      background: #fff;
+      box-shadow: var(--shadow);
     }
-    .failbox h2 { margin: 0 0 8px; font-size: 18px; }
-    .failbox p { margin: 8px 0; color: #555; font-size: 13px; line-height: 1.5; }
-    .failbox code { background: #f4f4f4; padding: 2px 5px; border-radius: 6px; }
-    @media (max-width: 860px) {
-      .app { grid-template-columns: 1fr; grid-template-rows: auto minmax(70vh, 1fr); }
-      aside { max-height: none; border-right: 0; border-bottom: 1px solid var(--panel-border); }
-      main { min-height: 72vh; }
+
+    .failbox h2 {
+      margin: 0 0 8px;
+      font-size: 18px;
+    }
+
+    .failbox p {
+      margin: 8px 0;
+      color: #4f5953;
+      font-size: 13px;
+      line-height: 1.5;
+    }
+
+    .failbox code {
+      border-radius: 6px;
+      padding: 2px 5px;
+      background: #f2f4f3;
+    }
+
+    @media (max-width: 920px) {
+      body { overflow: auto; }
+      .app {
+        grid-template-columns: 1fr;
+        grid-template-rows: auto minmax(68dvh, 1fr);
+      }
+      aside {
+        max-height: none;
+        padding: 16px;
+        border-right: 0;
+        border-bottom: 1px solid var(--line);
+        box-shadow: 0 10px 28px rgba(20, 28, 24, 0.08);
+      }
+      .brand {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr);
+      }
+      h1 { max-width: 18ch; }
+      .dashboard {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 12px;
+      }
+      .panel { margin: 0; }
+      .sources { display: none; }
+      main { min-height: 68dvh; }
+      .map-tools {
+        right: 10px;
+        bottom: 24px;
+        left: 10px;
+        justify-content: flex-end;
+        flex-wrap: wrap;
+      }
+    }
+
+    @media (max-width: 620px) {
+      aside { gap: 10px; }
+      .dashboard { grid-template-columns: 1fr; }
+      .metric-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .subtitle { font-size: 12px; }
+      .panel { padding: 12px; }
+      main { min-height: 72dvh; }
+      .maplibregl-ctrl-top-right { top: 8px; right: 8px; }
+      .maplibregl-ctrl-bottom-right { right: 8px; bottom: 8px; }
+      .tool-chip { font-size: 11px; }
     }
   </style>
 </head>
 <body>
   <div class="app">
     <aside>
-      <h1>Densidad de población por municipio</h1>
-      <p class="subtitle">España · habitantes por km² · datos municipales más recientes disponibles en INE: 2025.</p>
+      <header class="brand">
+        <h1>Densidad de población municipal</h1>
+        <p class="subtitle">España · habitantes por km2 · datos municipales más recientes disponibles en INE: 2025.</p>
+      </header>
 
-      <div class="card">
-        <span class="label">Estado</span>
-        <div id="status">Cargando datos del INE e IGN…</div>
-        <div class="metric-grid">
-          <div class="metric"><b id="m-munis">—</b><span>municipios</span></div>
-          <div class="metric"><b id="m-max">—</b><span>máx. hab/km²</span></div>
-          <div class="metric"><b id="m-year">—</b><span>año población</span></div>
-          <div class="metric"><b id="m-total">—</b><span>población total</span></div>
+      <section class="dashboard">
+        <div class="panel">
+          <span class="label">Estado</span>
+          <div id="status" aria-live="polite">Preparando mapa y descargando datos oficiales...</div>
+          <div class="metric-grid">
+            <div class="metric"><b id="m-munis">-</b><span>municipios</span></div>
+            <div class="metric"><b id="m-max">-</b><span>max. hab/km2</span></div>
+            <div class="metric"><b id="m-year">-</b><span>año población</span></div>
+            <div class="metric"><b id="m-total">-</b><span>población total</span></div>
+          </div>
         </div>
-      </div>
 
-      <div class="card">
-        <span class="label">Escala de color</span>
-        <div class="legend-bar"></div>
-        <div class="legend-labels"><span>baja</span><span>media</span><span>muy alta</span></div>
-        <p class="note">La escala es logarítmica para que no desaparezcan los municipios rurales y para que Madrid, Barcelona y los municipios metropolitanos no “aplasten” el resto del mapa.</p>
-      </div>
+        <div class="panel">
+          <span class="label">Escala de color</span>
+          <div class="legend-bar"></div>
+          <div class="legend-labels"><span>baja</span><span>media</span><span>muy alta</span></div>
+          <p class="note">Escala logarítmica: permite leer zonas rurales sin que los municipios metropolitanos oculten el resto.</p>
+        </div>
 
-      <div class="card">
-        <span class="label">Buscar municipio</span>
-        <input id="searchBox" placeholder="Ej. Madrid, Barcelona, Mislata…" autocomplete="off" />
-        <button id="searchBtn">Centrar</button>
-        <p id="searchHint" class="hint"></p>
-      </div>
+        <div class="panel">
+          <label class="label" for="searchBox">Buscar municipio</label>
+          <div class="search-row">
+            <input id="searchBox" placeholder="Ej. Madrid, Barcelona, Mislata..." autocomplete="off" />
+            <button id="searchBtn" title="Centrar municipio" aria-label="Centrar municipio">⌕</button>
+          </div>
+          <p id="searchHint" class="hint"></p>
+        </div>
 
-      <div class="card">
-        <span class="label">Top densidad</span>
-        <ol id="topList"></ol>
-      </div>
+        <div class="panel">
+          <span class="label">Top densidad</span>
+          <ol id="topList"></ol>
+        </div>
+      </section>
 
-      <div class="card sources">
+      <section class="panel sources">
         <span class="label">Fuentes</span>
-        <p>INE: tabla 68065, <em>Población según municipio y sexo</em>, Censo anual de población 2021–2025.</p>
-        <p>IGN/CNIG: listado geográfico de municipios — coordenadas y superficie — y WMS de unidades administrativas.</p>
+        <p>INE: tabla 68065, <em>Población según municipio y sexo</em>, Censo anual de población 2021-2025.</p>
+        <p>IGN/CNIG: listado geográfico de municipios con superficie y enlace cartográfico de centro municipal.</p>
+        <p>Mapa base: OpenStreetMap y CARTO raster tiles de alta densidad.</p>
         <p><a href="https://www.ine.es/jaxiT3/Tabla.htm?t=68065" target="_blank" rel="noreferrer">Ver tabla INE</a> · <a href="https://www.ign.es/web/ane-datos-geograficos" target="_blank" rel="noreferrer">Ver datos IGN</a></p>
-      </div>
-
-      <p class="note">Este HTML carga datos externos al abrirse. Si se bloquean por CORS, súbelo a GitHub Pages o ábrelo desde un servidor local; no desde <code>file://</code>.</p>
+      </section>
     </aside>
 
     <main>
       <div id="map"></div>
+      <div class="map-tools" aria-hidden="true">
+        <div class="tool-chip">Mapa HD</div>
+        <div class="tool-chip">Globo 3D suave</div>
+      </div>
       <div id="failbox" class="failbox">
         <h2>No se pudieron cargar los datos externos</h2>
-        <p>El mapa está preparado para usar datos municipales reales, pero el navegador puede bloquear descargas directas si abres el archivo localmente.</p>
-        <p>Solución rápida: pon este HTML en una carpeta y ejecútalo con <code>python -m http.server 8000</code>. Luego abre <code>http://localhost:8000</code>.</p>
-        <p>También puedes subirlo a GitHub Pages.</p>
+        <p>La web usa datos municipales reales del INE y del IGN. Si alguna fuente externa cambia de estructura o se bloquea, el mapa no puede calcular densidades.</p>
+        <p>Prueba local: ejecuta <code>python -m http.server 8000</code> en esta carpeta y abre <code>http://localhost:8000</code>.</p>
       </div>
     </main>
   </div>
@@ -247,189 +446,202 @@
 const INE_CSV = "https://www.ine.es/jaxiT3/files/t/csv_bdsc/68065.csv";
 const IGN_XLSX = "https://www.ign.es/resources/ane/Informacion_Geografica_Destacada/IGN_INFOGEO_MUNICIPIOS.xlsx";
 
-const map = L.map('map', {
-  zoomControl: true,
-  attributionControl: true,
-  preferCanvas: true,
-  minZoom: 5,
-  maxZoom: 11
-}).setView([40.1, -3.7], 6);
+const MAP_STYLE = {
+  version: 8,
+  sources: {
+    carto: {
+      type: "raster",
+      tiles: [
+        "https://a.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}@2x.png",
+        "https://b.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}@2x.png",
+        "https://c.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}@2x.png"
+      ],
+      tileSize: 256,
+      attribution: "&copy; OpenStreetMap contributors &copy; CARTO"
+    }
+  },
+  layers: [
+    {
+      id: "carto-base",
+      type: "raster",
+      source: "carto",
+      minzoom: 0,
+      maxzoom: 19,
+      paint: { "raster-saturation": -0.1, "raster-contrast": 0.05 }
+    }
+  ]
+};
 
-const boundaryPane = map.createPane('boundaryPane');
-boundaryPane.classList.add('boundary-pane');
-boundaryPane.style.zIndex = 350;
-const pointPane = map.createPane('pointPane');
-pointPane.style.zIndex = 450;
+const map = new maplibregl.Map({
+  container: "map",
+  style: MAP_STYLE,
+  center: [-3.7, 40.1],
+  zoom: 5.25,
+  minZoom: 4.2,
+  maxZoom: 12,
+  pitch: 36,
+  bearing: -12,
+  attributionControl: false,
+  projection: { type: "globe" }
+});
 
-L.tileLayer.wms('https://www.ign.es/wms-inspire/unidades-administrativas?', {
-  layers: 'AU.AdministrativeBoundary',
-  format: 'image/png',
-  transparent: true,
-  version: '1.3.0',
-  opacity: 0.95,
-  pane: 'boundaryPane',
-  attribution: 'Límites administrativos: © IGN/CNIG'
-}).addTo(map);
+map.addControl(new maplibregl.NavigationControl({ visualizePitch: true }), "top-right");
+map.addControl(new maplibregl.AttributionControl({ compact: true }), "bottom-right");
 
-const renderer = L.canvas({ padding: 0.35, pane: 'pointPane' });
+const mapReady = new Promise(resolve => map.on("load", resolve));
 let municipalities = [];
+let selectedCode = "";
+let hoveredCode = "";
 let maxDensity = 1;
-let markerLayer = L.layerGroup([], { pane: 'pointPane' }).addTo(map);
-let markerIndex = new Map();
 
-function setStatus(html) { document.getElementById('status').innerHTML = html; }
+function setStatus(html) {
+  document.getElementById("status").innerHTML = html;
+}
+
 function fmt(n, dec = 0) {
-  if (!Number.isFinite(n)) return '—';
-  return new Intl.NumberFormat('es-ES', { maximumFractionDigits: dec, minimumFractionDigits: dec }).format(n);
+  if (!Number.isFinite(n)) return "-";
+  return new Intl.NumberFormat("es-ES", {
+    maximumFractionDigits: dec,
+    minimumFractionDigits: dec
+  }).format(n);
 }
+
 function normalizeKey(k) {
-  return String(k || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]/g, '');
+  return String(k || "")
+    .replace(/^\uFEFF/, "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, "");
 }
-function getVal(row, regexes) {
+
+function getVal(row, candidates) {
   const keys = Object.keys(row);
-  for (const re of regexes) {
-    const k = keys.find(key => re.test(normalizeKey(key)));
-    if (k !== undefined && row[k] !== undefined && row[k] !== '') return row[k];
+  for (const candidate of candidates) {
+    const target = normalizeKey(candidate);
+    const key = keys.find(k => normalizeKey(k) === target);
+    if (key !== undefined && row[key] !== undefined && row[key] !== "") return row[key];
   }
-  return '';
+  return "";
 }
+
 function parseNumber(v) {
-  if (typeof v === 'number') return v;
+  if (typeof v === "number") return v;
   if (v === null || v === undefined) return NaN;
   let s = String(v).trim();
-  if (!s || s === '..') return NaN;
-  s = s.replace(/\s/g, '');
-  // Spanish thousands/decimal handling: 1.234,56 -> 1234.56; 1,23 -> 1.23
-  if (/^-?\d{1,3}(\.\d{3})+(,\d+)?$/.test(s)) s = s.replace(/\./g, '').replace(',', '.');
-  else s = s.replace(',', '.');
+  if (!s || s === "..") return NaN;
+  s = s.replace(/\s/g, "");
+  if (/^-?\d{1,3}(\.\d{3})+(,\d+)?$/.test(s)) s = s.replace(/\./g, "").replace(",", ".");
+  else s = s.replace(",", ".");
   return Number(s);
 }
-function parseCoord(v) {
-  if (typeof v === 'number') return v;
-  let s = String(v ?? '').trim();
-  if (!s) return NaN;
-  const direct = parseNumber(s);
-  if (Number.isFinite(direct)) return direct;
-  // DMS fallback, e.g. 3° 42' 21" W
-  const sign = /[WOwO]|Oeste|West/i.test(s) ? -1 : 1;
-  const parts = s.match(/\d+(?:[\.,]\d+)?/g);
-  if (!parts) return NaN;
-  const nums = parts.map(parseNumber);
-  return sign * (nums[0] + (nums[1] || 0) / 60 + (nums[2] || 0) / 3600);
-}
-function extractCodeFromAny(row) {
-  const keys = Object.keys(row);
-  const cproKey = keys.find(k => /^(cpro|codigoprovincia|codprovincia|provinciaine)$/.test(normalizeKey(k)));
-  const cmunKey = keys.find(k => /^(cmun|codigomunicipio|codmunicipio|municipioine)$/.test(normalizeKey(k)));
-  if (cproKey && cmunKey) {
-    const cpro = String(Math.trunc(parseNumber(row[cproKey]))).padStart(2, '0');
-    const cmun = String(Math.trunc(parseNumber(row[cmunKey]))).padStart(3, '0');
-    if (/^\d{5}$/.test(cpro + cmun)) return cpro + cmun;
-  }
-  const preferred = keys.filter(k => /codigo|cod|ine|cmun|municipio/.test(normalizeKey(k)));
-  for (const k of preferred.concat(keys)) {
-    const v = String(row[k] ?? '').trim();
-    let m = v.match(/\b(\d{5})\b/);
-    if (m) return m[1];
-    if (/^\d{1,5}$/.test(v)) {
-      const n = Math.trunc(parseNumber(v));
-      if (n >= 1001 && n <= 52999) return String(n).padStart(5, '0');
-    }
-  }
-  return '';
-}
-function extractCodeFromINEField(v) {
-  const s = String(v || '');
-  const m = s.match(/\b(\d{5})\b/);
-  return m ? m[1] : '';
-}
-function cleanName(s) {
-  return String(s || '')
-    .replace(/^\s*\d{5}\s+/, '')
-    .replace(/^\s*\d{1,2}\s+/, '')
-    .trim();
-}
-function searchText(s) {
-  return String(s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
-}
-function interp(a, b, t) { return Math.round(a + (b - a) * t); }
-function colorForDensity(d) {
-  const t = Math.max(0, Math.min(1, Math.log10(d + 1) / Math.log10(maxDensity + 1)));
-  let r, g, b;
-  if (t < 0.5) {
-    const u = t / 0.5;
-    r = interp(255, 255, u); g = interp(255, 213, u); b = interp(255, 0, u);
-  } else {
-    const u = (t - 0.5) / 0.5;
-    r = interp(255, 230, u); g = interp(213, 0, u); b = interp(0, 0, u);
-  }
-  return `rgb(${r},${g},${b})`;
-}
-function radiusForDensity(d) {
-  const t = Math.max(0, Math.min(1, Math.log10(d + 1) / Math.log10(maxDensity + 1)));
-  return 2.2 + 7.5 * Math.sqrt(t);
+
+function extractINECode(v) {
+  const m = String(v || "").match(/\b(\d{5})\b/);
+  return m ? m[1] : "";
 }
 
-async function fetchText(url) {
-  const res = await fetch(url, { mode: 'cors' });
+function cleanName(s) {
+  return String(s || "").replace(/^\s*\d{5}\s+/, "").trim();
+}
+
+function searchText(s) {
+  return String(s || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase();
+}
+
+function escapeHtml(value) {
+  return String(value ?? "").replace(/[&<>"']/g, ch => ({
+    "&": "&amp;",
+    "<": "&lt;",
+    ">": "&gt;",
+    '"': "&quot;",
+    "'": "&#39;"
+  }[ch]));
+}
+
+function extractCenterFromIgnUrl(url) {
+  const m = String(url || "").match(/[?&]center=(-?\d+(?:\.\d+)?),(-?\d+(?:\.\d+)?)/i);
+  if (!m) return { lon: NaN, lat: NaN };
+  return { lon: Number(m[1]), lat: Number(m[2]) };
+}
+
+function densityScore(density) {
+  return Math.max(0, Math.min(1, Math.log10(density + 1) / Math.log10(maxDensity + 1)));
+}
+
+async function fetchText(url, encoding = "utf-8") {
+  const res = await fetch(url, { mode: "cors" });
   if (!res.ok) throw new Error(`HTTP ${res.status} en ${url}`);
   const buf = await res.arrayBuffer();
-  try { return new TextDecoder('iso-8859-1').decode(buf); }
-  catch { return new TextDecoder('utf-8').decode(buf); }
+  try {
+    return new TextDecoder(encoding).decode(buf);
+  } catch {
+    return new TextDecoder("windows-1252").decode(buf);
+  }
 }
+
 async function fetchWorkbook(url) {
-  const res = await fetch(url, { mode: 'cors' });
+  const res = await fetch(url, { mode: "cors" });
   if (!res.ok) throw new Error(`HTTP ${res.status} en ${url}`);
   const ab = await res.arrayBuffer();
-  return XLSX.read(ab, { type: 'array' });
+  return XLSX.read(ab, { type: "array" });
 }
 
 async function loadINEPopulation() {
-  const text = await fetchText(INE_CSV);
-  const parsed = Papa.parse(text, { header: true, delimiter: ';', skipEmptyLines: true });
-  if (parsed.errors?.length) console.warn('CSV parse warnings', parsed.errors.slice(0, 3));
-  const rows = parsed.data;
+  const text = await fetchText(INE_CSV, "iso-8859-15");
+  const parsed = Papa.parse(text, { header: true, delimiter: ";", skipEmptyLines: true });
+  if (parsed.errors?.length) console.warn("CSV parse warnings", parsed.errors.slice(0, 3));
+
   const periods = new Set();
   const byCode = new Map();
-  for (const row of rows) {
-    const munField = getVal(row, [/^municipios$/, /^municipio$/]);
-    const sexo = String(getVal(row, [/^sexo$/])).trim().toLowerCase();
-    const period = String(getVal(row, [/^periodo$/, /^ano$/, /^year$/])).trim();
-    const totalRaw = getVal(row, [/^total$/, /^valor$/]);
-    if (!munField || !/total/i.test(sexo)) continue;
-    const code = extractCodeFromINEField(munField);
+  for (const row of parsed.data) {
+    const munField = getVal(row, ["Municipios", "Municipio"]);
+    const sex = String(getVal(row, ["Sexo"])).trim().toLowerCase();
+    const period = String(getVal(row, ["Periodo", "Año", "Ano", "Year"])).trim();
+    const totalRaw = getVal(row, ["Total", "Valor"]);
+    if (!munField || sex !== "total") continue;
+
+    const code = extractINECode(munField);
     const population = parseNumber(totalRaw);
     if (!code || !Number.isFinite(population)) continue;
+
     periods.add(period);
     const prev = byCode.get(code);
     if (!prev || Number(period) > Number(prev.period)) {
       byCode.set(code, { code, name: cleanName(munField), population, period });
     }
   }
-  return { byCode, period: [...periods].sort((a,b) => Number(b) - Number(a))[0] || '—' };
+
+  return {
+    byCode,
+    period: [...periods].sort((a, b) => Number(b) - Number(a))[0] || "-"
+  };
 }
 
 async function loadIGNMunicipalInfo() {
   const wb = await fetchWorkbook(IGN_XLSX);
-  const rows = [];
-  for (const sheetName of wb.SheetNames) {
-    const sheetRows = XLSX.utils.sheet_to_json(wb.Sheets[sheetName], { defval: '' });
-    if (sheetRows.length) rows.push(...sheetRows);
-  }
+  const sheetName = wb.SheetNames.find(name => normalizeKey(name) === "igninfogeomunicipios") || wb.SheetNames[0];
+  const rows = XLSX.utils.sheet_to_json(wb.Sheets[sheetName], { defval: "", raw: true });
   const byCode = new Map();
+
   for (const row of rows) {
-    const code = extractCodeFromAny(row);
-    if (!code) continue;
-    const lat = parseCoord(getVal(row, [/latitud/, /^lat$/]));
-    const lon = parseCoord(getVal(row, [/longitud/, /^lon$/, /^lng$/]));
-    const area = parseNumber(getVal(row, [/superficie/, /extension/, /areakm/, /km2/ ]));
-    const name = cleanName(getVal(row, [/municipio/, /nombre/, /name/])) || code;
-    const popFallback = parseNumber(getVal(row, [/poblacion/, /habitantes/, /hab$/]));
+    const code = String(getVal(row, ["Identificador"])).trim().padStart(5, "0");
+    const area = parseNumber(getVal(row, ["Superficie (km2)", "Superficie km2"]));
+    const name = cleanName(getVal(row, ["Nombre"])) || code;
+    const province = getVal(row, ["Provincia"]);
+    const popFallback = parseNumber(getVal(row, ["Población", "Poblacion"]));
+    const { lon, lat } = extractCenterFromIgnUrl(getVal(row, ["Ver en mapa"]));
+
+    if (!/^\d{5}$/.test(code)) continue;
     if (!Number.isFinite(lat) || !Number.isFinite(lon) || !Number.isFinite(area) || area <= 0) continue;
-    // Filter obvious non-Spain or malformed rows
     if (lat < 27 || lat > 44.5 || lon < -19 || lon > 5) continue;
-    byCode.set(code, { code, name, lat, lon, area, popFallback });
+
+    byCode.set(code, { code, name, province, lat, lon, area, popFallback });
   }
+
   return byCode;
 }
 
@@ -439,95 +651,206 @@ function buildDataset(popData, geoData) {
     const pop = popData.byCode.get(code);
     const population = pop?.population ?? geo.popFallback;
     if (!Number.isFinite(population)) continue;
+
     const density = population / geo.area;
     out.push({
       code,
       name: pop?.name || geo.name,
+      province: geo.province,
       lat: geo.lat,
       lon: geo.lon,
       area: geo.area,
       population,
       density,
-      period: pop?.period || popData.period,
+      period: pop?.period || popData.period
     });
   }
-  out.sort((a,b) => b.density - a.density);
+  out.sort((a, b) => b.density - a.density);
   return out;
 }
 
+function toGeoJson(data) {
+  return {
+    type: "FeatureCollection",
+    features: data.map(m => ({
+      type: "Feature",
+      id: m.code,
+      geometry: { type: "Point", coordinates: [m.lon, m.lat] },
+      properties: {
+        ...m,
+        densityScore: densityScore(m.density)
+      }
+    }))
+  };
+}
+
+function popupHtml(m) {
+  return `
+    <div class="popup-title">${escapeHtml(m.name)}</div>
+    <div class="popup-row"><span>Provincia:</span> ${escapeHtml(m.province || "-")}</div>
+    <div class="popup-row"><span>Densidad:</span> ${fmt(m.density, 1)} hab/km2</div>
+    <div class="popup-row"><span>Poblacion:</span> ${fmt(m.population)}</div>
+    <div class="popup-row"><span>Superficie:</span> ${fmt(m.area, 2)} km2</div>
+    <div class="popup-row"><span>Codigo INE:</span> ${escapeHtml(m.code)}</div>
+  `;
+}
+
 function drawPoints(data) {
-  markerLayer.clearLayers();
-  markerIndex.clear();
-  const fragMarkers = [];
-  for (const m of data) {
-    const marker = L.circleMarker([m.lat, m.lon], {
-      renderer,
-      pane: 'pointPane',
-      radius: radiusForDensity(m.density),
-      stroke: true,
-      color: 'rgba(0,0,0,0.25)',
-      weight: 0.45,
-      fillColor: colorForDensity(m.density),
-      fillOpacity: 0.78
-    }).bindPopup(`
-      <div class="popup-title">${m.name}</div>
-      <div class="popup-row"><span>Densidad:</span> ${fmt(m.density, 1)} hab/km²</div>
-      <div class="popup-row"><span>Población:</span> ${fmt(m.population)}</div>
-      <div class="popup-row"><span>Superficie:</span> ${fmt(m.area, 2)} km²</div>
-      <div class="popup-row"><span>Código INE:</span> ${m.code}</div>
-    `);
-    markerIndex.set(searchText(m.name), marker);
-    fragMarkers.push(marker);
+  const sourceData = toGeoJson(data);
+  if (map.getSource("municipalities")) {
+    map.getSource("municipalities").setData(sourceData);
+    return;
   }
-  markerLayer = L.layerGroup(fragMarkers, { pane: 'pointPane' }).addTo(map);
+
+  map.addSource("municipalities", {
+    type: "geojson",
+    data: sourceData,
+    promoteId: "code"
+  });
+
+  map.addLayer({
+    id: "municipal-points",
+    type: "circle",
+    source: "municipalities",
+    paint: {
+      "circle-radius": ["interpolate", ["linear"], ["get", "densityScore"], 0, 2.2, 0.5, 5.5, 1, 11],
+      "circle-color": ["interpolate", ["linear"], ["get", "densityScore"], 0, "#f8fff4", 0.32, "#c6f27a", 0.52, "#ffd857", 0.72, "#f17745", 1, "#c71f28"],
+      "circle-opacity": 0.82,
+      "circle-stroke-color": "rgba(19, 27, 23, 0.55)",
+      "circle-stroke-width": ["case", ["boolean", ["feature-state", "hover"], false], 2.2, 0.55]
+    }
+  });
+
+  map.addLayer({
+    id: "municipal-selected",
+    type: "circle",
+    source: "municipalities",
+    filter: ["==", ["get", "code"], ""],
+    paint: {
+      "circle-radius": 16,
+      "circle-color": "rgba(35, 89, 214, 0.12)",
+      "circle-stroke-color": "#2359d6",
+      "circle-stroke-width": 2.5
+    }
+  });
+
+  map.on("mouseenter", "municipal-points", () => {
+    map.getCanvas().style.cursor = "pointer";
+  });
+
+  map.on("mouseleave", "municipal-points", () => {
+    map.getCanvas().style.cursor = "";
+    if (hoveredCode) {
+      map.setFeatureState({ source: "municipalities", id: hoveredCode }, { hover: false });
+      hoveredCode = "";
+    }
+  });
+
+  map.on("mousemove", "municipal-points", e => {
+    const feature = e.features?.[0];
+    if (!feature) return;
+    const code = feature.properties.code;
+    if (hoveredCode && hoveredCode !== code) {
+      map.setFeatureState({ source: "municipalities", id: hoveredCode }, { hover: false });
+    }
+    hoveredCode = code;
+    map.setFeatureState({ source: "municipalities", id: code }, { hover: true });
+  });
+
+  map.on("click", "municipal-points", e => {
+    const props = e.features?.[0]?.properties;
+    if (!props) return;
+    const municipality = municipalities.find(m => m.code === props.code);
+    if (municipality) selectMunicipality(municipality, { openPopup: true, fly: false, lngLat: e.lngLat });
+  });
 }
 
 function updateUI(data, period) {
-  const totalPop = data.reduce((s, d) => s + d.population, 0);
-  document.getElementById('m-munis').textContent = fmt(data.length);
-  document.getElementById('m-max').textContent = fmt(maxDensity, 0);
-  document.getElementById('m-year').textContent = period;
-  document.getElementById('m-total').textContent = fmt(totalPop);
-  const top = data.slice(0, 10).map(d => `<li><strong>${d.name}</strong>: ${fmt(d.density, 0)} hab/km²</li>`).join('');
-  document.getElementById('topList').innerHTML = top;
-  setStatus(`Datos cargados. Densidad calculada como <strong>población / superficie municipal</strong>.`);
+  const totalPop = data.reduce((sum, d) => sum + d.population, 0);
+  document.getElementById("m-munis").textContent = fmt(data.length);
+  document.getElementById("m-max").textContent = fmt(maxDensity, 0);
+  document.getElementById("m-year").textContent = period;
+  document.getElementById("m-total").textContent = fmt(totalPop);
+
+  document.getElementById("topList").innerHTML = data.slice(0, 10).map(d =>
+    `<li data-code="${escapeHtml(d.code)}"><strong>${escapeHtml(d.name)}</strong>: ${fmt(d.density, 0)} hab/km2</li>`
+  ).join("");
+
+  document.querySelectorAll("#topList li").forEach(item => {
+    item.addEventListener("click", () => {
+      const m = municipalities.find(d => d.code === item.dataset.code);
+      if (m) selectMunicipality(m, { openPopup: true, fly: true });
+    });
+  });
+
+  setStatus(`Datos cargados. <strong>${fmt(data.length)}</strong> municipios cruzados con coordenadas, superficie y poblacion.`);
+}
+
+function selectMunicipality(m, options = {}) {
+  selectedCode = m.code;
+  map.setFilter("municipal-selected", ["==", ["get", "code"], selectedCode]);
+
+  if (options.fly !== false) {
+    map.flyTo({
+      center: [m.lon, m.lat],
+      zoom: Math.max(map.getZoom(), 9.2),
+      pitch: 46,
+      bearing: -8,
+      speed: 0.9,
+      curve: 1.35,
+      essential: true
+    });
+  }
+
+  if (options.openPopup) {
+    new maplibregl.Popup({ closeButton: true, closeOnClick: true, offset: 14 })
+      .setLngLat(options.lngLat || [m.lon, m.lat])
+      .setHTML(popupHtml(m))
+      .addTo(map);
+  }
 }
 
 function setupSearch() {
-  const input = document.getElementById('searchBox');
-  const hint = document.getElementById('searchHint');
+  const input = document.getElementById("searchBox");
+  const hint = document.getElementById("searchHint");
   const go = () => {
     const q = searchText(input.value.trim());
     if (!q) return;
-    const m = municipalities.find(d => searchText(d.name).includes(q));
-    if (!m) { hint.textContent = 'No encuentro ese municipio en el dataset cargado.'; return; }
-    hint.textContent = `${m.name}: ${fmt(m.density, 1)} hab/km².`;
-    map.setView([m.lat, m.lon], Math.max(map.getZoom(), 9), { animate: true });
-    const marker = [...markerLayer.getLayers()].find(layer => layer.getLatLng().lat === m.lat && layer.getLatLng().lng === m.lon);
-    if (marker) marker.openPopup();
+    const exact = municipalities.find(d => searchText(d.name) === q);
+    const partial = municipalities.find(d => searchText(d.name).includes(q));
+    const m = exact || partial;
+    if (!m) {
+      hint.textContent = "No encuentro ese municipio en el dataset cargado.";
+      return;
+    }
+    hint.textContent = `${m.name}: ${fmt(m.density, 1)} hab/km2.`;
+    selectMunicipality(m, { openPopup: true, fly: true });
   };
-  document.getElementById('searchBtn').addEventListener('click', go);
-  input.addEventListener('keydown', e => { if (e.key === 'Enter') go(); });
+  document.getElementById("searchBtn").addEventListener("click", go);
+  input.addEventListener("keydown", e => { if (e.key === "Enter") go(); });
 }
 
 (async function init() {
   try {
-    setStatus('Descargando población municipal del INE…');
+    setStatus("Descargando población municipal del INE...");
     const popData = await loadINEPopulation();
-    setStatus('Descargando coordenadas y superficies municipales del IGN…');
+    setStatus("Descargando coordenadas y superficies municipales del IGN...");
     const geoData = await loadIGNMunicipalInfo();
     municipalities = buildDataset(popData, geoData);
     if (municipalities.length < 7000) {
-      throw new Error(`Solo se han podido cruzar ${municipalities.length} municipios; revisa nombres de columnas o CORS.`);
+      throw new Error(`Solo se han podido cruzar ${municipalities.length} municipios; revisa columnas de IGN/INE o CORS.`);
     }
+
     maxDensity = Math.max(...municipalities.map(d => d.density));
+    await mapReady;
+    try { map.setProjection({ type: "globe" }); } catch (err) { console.warn("Globe projection unavailable", err); }
     drawPoints(municipalities);
     updateUI(municipalities, popData.period);
     setupSearch();
   } catch (err) {
     console.error(err);
-    setStatus(`<strong>Error:</strong> ${err.message}`);
-    document.getElementById('failbox').style.display = 'block';
+    setStatus(`<strong>Error:</strong> ${escapeHtml(err.message)}`);
+    document.getElementById("failbox").style.display = "block";
   }
 })();
 </script>
