@@ -27,6 +27,8 @@
       --red: #c71f28;
       --yellow: #ffd857;
       --shadow: 0 18px 55px rgba(28, 41, 35, 0.16);
+      --ease-spring: cubic-bezier(.2, .9, .22, 1.18);
+      --ease-smooth: cubic-bezier(.22, 1, .36, 1);
     }
 
     * { box-sizing: border-box; }
@@ -93,7 +95,7 @@
       background: var(--panel);
       box-shadow: 0 1px 0 rgba(255,255,255,0.7) inset;
       backdrop-filter: blur(16px);
-      transition: transform 180ms ease, border-color 180ms ease, box-shadow 180ms ease;
+      transition: transform 180ms var(--ease-smooth), border-color 180ms ease, box-shadow 180ms ease;
     }
 
     .panel:hover {
@@ -206,7 +208,7 @@
       padding: 0;
       cursor: pointer;
       font-weight: 800;
-      transition: transform 160ms ease, background 160ms ease, border-color 160ms ease;
+      transition: transform 160ms var(--ease-smooth), background 160ms ease, border-color 160ms ease, box-shadow 160ms ease;
     }
 
     button:hover {
@@ -234,6 +236,42 @@
       padding: 0 10px;
       font-size: 12px;
       text-align: center;
+    }
+
+    .feel-switch {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 8px;
+    }
+
+    .feel-btn {
+      width: 100%;
+      min-height: 44px;
+      padding: 0 10px;
+      border-color: rgba(17, 23, 20, 0.14);
+      background: rgba(255, 255, 255, 0.72);
+      font-size: 12px;
+      text-align: left;
+    }
+
+    .feel-btn strong {
+      display: block;
+      font-size: 13px;
+      line-height: 1.1;
+    }
+
+    .feel-btn span {
+      display: block;
+      margin-top: 2px;
+      color: var(--muted);
+      font-size: 10px;
+      line-height: 1.15;
+    }
+
+    .feel-btn.is-active {
+      border-color: rgba(35, 89, 214, 0.58);
+      background: #edf4ff;
+      box-shadow: 0 0 0 3px rgba(35, 89, 214, 0.12);
     }
 
     .control-stack {
@@ -417,6 +455,14 @@
       backdrop-filter: blur(14px);
     }
 
+    .motion-chip {
+      display: none;
+    }
+
+    body.feel-animated .motion-chip {
+      display: block;
+    }
+
     .map-legend {
       position: absolute;
       left: 16px;
@@ -524,6 +570,129 @@
       background: #f2f4f3;
     }
 
+    body.feel-static *, body.feel-static *::before, body.feel-static *::after {
+      animation: none !important;
+      transition-duration: 0ms !important;
+      scroll-behavior: auto !important;
+    }
+
+    body.feel-animated .panel {
+      transform-origin: 50% 0;
+      animation: panelIn 520ms var(--ease-spring) both;
+      animation-delay: calc(var(--stagger, 0) * 38ms);
+    }
+
+    body.feel-animated .panel:hover {
+      transform: translateY(-3px) scale(1.006);
+      box-shadow: 0 18px 36px rgba(28, 41, 35, 0.13);
+    }
+
+    body.feel-animated .mode-btn,
+    body.feel-animated .feel-btn,
+    body.feel-animated .action-btn {
+      transition-duration: 260ms;
+      transition-timing-function: var(--ease-spring);
+    }
+
+    body.feel-animated button:hover {
+      transform: translateY(-2px) scale(1.015);
+      box-shadow: 0 10px 24px rgba(20, 28, 24, 0.1);
+    }
+
+    body.feel-animated .mode-btn.is-active,
+    body.feel-animated .feel-btn.is-active {
+      animation: activePop 360ms var(--ease-spring) both;
+    }
+
+    body.feel-animated .metric b {
+      animation: numberLift 420ms var(--ease-smooth) both;
+    }
+
+    body.feel-animated .map-legend {
+      animation: legendFloat 900ms var(--ease-smooth) both;
+    }
+
+    body.feel-animated .tool-chip {
+      animation: chipFloat 4.5s ease-in-out infinite;
+    }
+
+    body.feel-animated .tool-chip:nth-child(2) { animation-delay: .7s; }
+    body.feel-animated .tool-chip:nth-child(3) { animation-delay: 1.4s; }
+
+    body.feel-animated .selection-pulse {
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      z-index: 2;
+      width: 28px;
+      height: 28px;
+      margin: -14px 0 0 -14px;
+      pointer-events: none;
+      border: 2px solid rgba(35, 89, 214, 0.82);
+      border-radius: 999px;
+      box-shadow: 0 0 0 8px rgba(35, 89, 214, 0.1);
+      animation: selectionPulse 820ms var(--ease-smooth) both;
+    }
+
+    body.feel-animated aside {
+      transition: transform 360ms var(--ease-smooth), padding 260ms ease, border-color 260ms ease;
+    }
+
+    body.feel-animated main::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      z-index: 1;
+      pointer-events: none;
+      opacity: 0;
+      background: radial-gradient(circle at var(--mx, 50%) var(--my, 50%), rgba(35, 89, 214, 0.16), transparent 12%);
+      transition: opacity 220ms ease;
+    }
+
+    body.feel-animated main.is-pointer-active::after {
+      opacity: 1;
+    }
+
+    @keyframes panelIn {
+      from { opacity: 0; transform: translateY(10px) scale(.985); }
+      to { opacity: 1; transform: translateY(0) scale(1); }
+    }
+
+    @keyframes activePop {
+      0% { transform: scale(.985); }
+      60% { transform: scale(1.025); }
+      100% { transform: scale(1); }
+    }
+
+    @keyframes numberLift {
+      from { opacity: .45; transform: translateY(6px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    @keyframes legendFloat {
+      from { opacity: 0; transform: translateY(14px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    @keyframes chipFloat {
+      0%, 100% { transform: translateY(0); }
+      50% { transform: translateY(-4px); }
+    }
+
+    @keyframes selectionPulse {
+      from { opacity: .95; transform: scale(.55); }
+      to { opacity: 0; transform: scale(2.4); }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      body.feel-animated *, body.feel-animated *::before, body.feel-animated *::after {
+        animation-duration: 1ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 1ms !important;
+        scroll-behavior: auto !important;
+      }
+    }
+
     @media (max-width: 920px) {
       body { overflow: auto; }
       .app {
@@ -616,6 +785,15 @@
             <div class="metric"><b id="m-year">-</b><span>países</span></div>
             <div class="metric"><b id="m-total">-</b><span>población total</span></div>
           </div>
+        </div>
+
+        <div class="panel">
+          <span class="label">Feel visual</span>
+          <div class="feel-switch" role="group" aria-label="Comparar versiÃ³n sin y con animaciones">
+            <button id="feelStaticBtn" class="feel-btn is-active" data-feel="static" aria-pressed="true"><strong>A</strong><span>Sin animaciones</span></button>
+            <button id="feelMotionBtn" class="feel-btn" data-feel="animated" aria-pressed="false"><strong>B</strong><span>Con animaciones</span></button>
+          </div>
+          <p id="feelHint" class="hint">A mantiene la herramienta mÃ¡s analÃ­tica y directa.</p>
         </div>
 
         <div class="panel">
@@ -728,6 +906,7 @@
       <div class="map-tools" aria-hidden="true">
         <div class="tool-chip">Mapa HD</div>
         <div class="tool-chip">Globo 3D suave</div>
+        <div class="tool-chip motion-chip">Animaciones B</div>
       </div>
       <div id="mapLegend" class="map-legend">
         <div class="map-legend-title">Densidad de población</div>
@@ -847,11 +1026,72 @@ let activePopulationFilter = "all";
 let hideNoData = false;
 let cubeHeightMode = "medium";
 let gridSizeMode = "medium";
+let activeFeel = localStorage.getItem("mapFeelMode") || "static";
 let selectedMunicipality = null;
 let polygonDataPromise = null;
 
 function setStatus(html) {
   document.getElementById("status").innerHTML = html;
+}
+
+function cameraDuration(ms) {
+  return activeFeel === "animated" ? ms : 0;
+}
+
+function applyFeelMode(mode) {
+  activeFeel = mode === "animated" ? "animated" : "static";
+  localStorage.setItem("mapFeelMode", activeFeel);
+  document.body.classList.toggle("feel-animated", activeFeel === "animated");
+  document.body.classList.toggle("feel-static", activeFeel !== "animated");
+  document.querySelectorAll(".feel-btn").forEach(btn => {
+    const active = btn.dataset.feel === activeFeel;
+    btn.classList.toggle("is-active", active);
+    btn.setAttribute("aria-pressed", String(active));
+  });
+  const hint = document.getElementById("feelHint");
+  if (hint) {
+    hint.textContent = activeFeel === "animated"
+      ? "B activa entradas escalonadas, microinteracciones y cÃ¡mara suave."
+      : "A mantiene la herramienta mÃ¡s analÃ­tica y directa.";
+  }
+  if (map?.getCanvas) map.getCanvas().style.scrollBehavior = activeFeel === "animated" ? "smooth" : "auto";
+}
+
+function setupFeelControls() {
+  document.querySelectorAll(".feel-btn").forEach(btn => {
+    btn.addEventListener("click", () => {
+      applyFeelMode(btn.dataset.feel);
+      if (activeFeel === "animated") playFeelIntro();
+    });
+  });
+
+  const main = document.querySelector("main");
+  main.addEventListener("pointermove", e => {
+    if (activeFeel !== "animated") return;
+    const rect = main.getBoundingClientRect();
+    main.style.setProperty("--mx", `${((e.clientX - rect.left) / rect.width) * 100}%`);
+    main.style.setProperty("--my", `${((e.clientY - rect.top) / rect.height) * 100}%`);
+    main.classList.add("is-pointer-active");
+  });
+  main.addEventListener("pointerleave", () => main.classList.remove("is-pointer-active"));
+}
+
+function playFeelIntro() {
+  document.querySelectorAll(".panel").forEach((panel, i) => {
+    panel.style.setProperty("--stagger", i);
+    panel.style.animation = "none";
+    panel.offsetHeight;
+    panel.style.animation = "";
+  });
+}
+
+function pulseSelection() {
+  if (activeFeel !== "animated") return;
+  const main = document.querySelector("main");
+  const pulse = document.createElement("div");
+  pulse.className = "selection-pulse";
+  main.appendChild(pulse);
+  pulse.addEventListener("animationend", () => pulse.remove(), { once: true });
 }
 
 function fmt(n, dec = 0) {
@@ -1513,11 +1753,11 @@ async function setMode(mode) {
   }
 
   if (mode === "cubes") {
-    map.easeTo({ pitch: window.innerWidth < 620 ? 44 : 62, bearing: -18, duration: 650 });
+    map.easeTo({ pitch: window.innerWidth < 620 ? 44 : 62, bearing: -18, duration: cameraDuration(650) });
   } else if (mode === "heatmap") {
-    map.easeTo({ pitch: 18, bearing: 0, duration: 650 });
+    map.easeTo({ pitch: 18, bearing: 0, duration: cameraDuration(650) });
   } else {
-    map.easeTo({ pitch: window.innerWidth < 620 ? 22 : 36, bearing: -8, duration: 650 });
+    map.easeTo({ pitch: window.innerWidth < 620 ? 22 : 36, bearing: -8, duration: cameraDuration(650) });
   }
 
   updateMapLegend();
@@ -1736,7 +1976,7 @@ function setupAnalysisControls() {
     if (map.getSource("density-grid")) map.getSource("density-grid").setData(buildGridGeoJson(municipalities.filter(m => m.hasData)));
   });
   document.getElementById("resetViewBtn").addEventListener("click", () => {
-    map.fitBounds([[-25, 34], [35, 72]], { padding: 28, duration: 700 });
+    map.fitBounds([[-25, 34], [35, 72]], { padding: 28, duration: cameraDuration(700) });
   });
   document.getElementById("clearSelectionBtn").addEventListener("click", clearSelection);
   document.getElementById("collapseBtn").addEventListener("click", () => document.body.classList.add("sidebar-collapsed"));
@@ -1831,16 +2071,20 @@ function selectMunicipality(m, options = {}) {
   updateDetailPanel(m);
 
   if (options.fly !== false) {
-    map.flyTo({
+    const camera = {
       center: [m.lon, m.lat],
       zoom: Math.max(map.getZoom(), 9.2),
       pitch: activeMode === "cubes" ? 62 : 46,
       bearing: -8,
-      speed: 0.9,
-      curve: 1.35,
       essential: true
-    });
+    };
+    if (activeFeel === "animated") {
+      map.flyTo({ ...camera, speed: 0.9, curve: 1.35 });
+    } else {
+      map.jumpTo(camera);
+    }
   }
+  pulseSelection();
 
   if (options.openPopup) {
     new maplibregl.Popup({ closeButton: true, closeOnClick: true, offset: 14 })
@@ -1932,6 +2176,8 @@ function setupSearch() {
     setupModes();
     setupCountryFilter();
     setupAnalysisControls();
+    setupFeelControls();
+    applyFeelMode(activeFeel);
     updateMapLegend();
   } catch (err) {
     console.error(err);
