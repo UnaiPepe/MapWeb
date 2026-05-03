@@ -1,1 +1,1 @@
-﻿{"files":{"2024":"2024.json"},"title":"Migraciones municipales Espana","latestYear":2024,"years":[2024],"source":"Scaffold reproducible basado en centros LAU; pendiente de sustitucion por INE EMCR"}
+{"title":"Migraciones Espana y Europa","source":"INE EMCR y Eurostat","latestYear":2024,"eurostatYear":2024,"years":[2024],"files":{"2024":"2024.json"}}

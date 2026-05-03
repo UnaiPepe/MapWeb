@@ -33,7 +33,7 @@ const MODE_LAYERS = {
   cubes: ["ga-cubes"],
   grid: ["ga-grid-fill", "ga-grid-line"],
   bivariate: ["ga-bivariate"],
-  flows: ["ga-flows", "ga-flow-points"]
+  flows: ["ga-flows", "ga-flow-arrows", "ga-flow-hit", "ga-flow-points"]
 };
 
 export function createGeoAnalyticsApp(project, options = {}) {
@@ -65,8 +65,10 @@ class GeoAnalyticsApp {
     this.flows = [];
     this.metadata = {};
     this.cache = new Map();
+    this.metricStats = new Map();
     this.sourceKeys = new Map();
     this.hoveredId = "";
+    this.flowPopup = null;
     this.map = null;
   }
 
@@ -101,7 +103,9 @@ class GeoAnalyticsApp {
             </div>
           </header>
           <section class="dashboard">
+            ${this.renderProjectPanel()}
             ${this.renderStatusPanel()}
+            ${this.renderMetricPanel()}
             ${this.renderFeelPanel()}
             ${this.renderSearchPanel()}
             ${this.renderCountryPanel()}
@@ -152,6 +156,33 @@ class GeoAnalyticsApp {
           <div class="metric"><b data-metric-card="groups">-</b><span>${escapeHtml(labels[2])}</span></div>
           <div class="metric"><b data-metric-card="total">-</b><span>${escapeHtml(labels[3])}</span></div>
         </div>
+      </div>
+    `;
+  }
+
+  renderProjectPanel() {
+    if (!this.project.projectLinks?.length) return "";
+    const current = this.project.id;
+    return `
+      <div class="panel">
+        <label class="label" for="projectSwitch">Proyecto</label>
+        <select id="projectSwitch">
+          ${this.project.projectLinks.map(link => `<option value="${escapeHtml(link.href)}" ${link.id === current ? "selected" : ""}>${escapeHtml(link.label)}</option>`).join("")}
+        </select>
+        <p class="hint">El motor reutiliza controles, capas y carga bajo demanda entre visualizaciones.</p>
+      </div>
+    `;
+  }
+
+  renderMetricPanel() {
+    if (!this.project.metrics?.length) return "";
+    return `
+      <div class="panel">
+        <label class="label" for="activeMetric">Metrica activa</label>
+        <select id="activeMetric">
+          ${this.project.metrics.map(metric => `<option value="${escapeHtml(metric.id)}">${escapeHtml(metric.label)}</option>`).join("")}
+        </select>
+        <p data-role="metric-hint" class="hint"></p>
       </div>
     `;
   }
@@ -329,14 +360,16 @@ class GeoAnalyticsApp {
   }
 
   maxMetric(id = this.state.activeMetric, units = this.visibleUnits) {
+    if (units === this.visibleUnits && this.metricStats.has(id)) return this.metricStats.get(id).max;
     return Math.max(1, ...units.map(unit => Math.abs(this.metricValue(unit, id))).filter(Number.isFinite));
   }
 
   score(value, id = this.state.activeMetric) {
     const metric = this.metric(id);
-    const max = this.maxMetric(id);
+    const stats = this.metricStats.get(id);
+    const max = stats?.max ?? this.maxMetric(id);
     if (metric.scale === "diverging") {
-      const abs = Math.max(1, ...this.visibleUnits.map(unit => Math.abs(this.metricValue(unit, id))).filter(Number.isFinite));
+      const abs = stats?.abs ?? Math.max(1, ...this.visibleUnits.map(unit => Math.abs(this.metricValue(unit, id))).filter(Number.isFinite));
       return clamp((Number(value) + abs) / (abs * 2), 0, 1);
     }
     return clamp(Math.log10(Math.max(0, Number(value)) + 1) / Math.log10(max + 1), 0, 1);
@@ -397,6 +430,7 @@ class GeoAnalyticsApp {
     this.visibleUnits = pool.filter(unit => {
       if (this.state.hideNoData && unit.hasData === false) return false;
       for (const filter of this.project.filters || []) {
+        if (filter.unitFilter === false) continue;
         const value = this.state.filters[filter.id] ?? filter.defaultValue ?? "all";
         const option = (filter.options || []).find(item => item.value === value);
         if (option?.test && !option.test(unit, this)) return false;
@@ -404,10 +438,28 @@ class GeoAnalyticsApp {
       return true;
     });
     this.unitsById = new Map(this.visibleUnits.map(unit => [unit.id, unit]));
+    this.rebuildMetricStats();
     for (const unit of this.visibleUnits) {
       unit.value = this.metricValue(unit);
       unit.score = this.score(unit.value);
       unit.populationScore = this.score(unit.metrics.population || 0, "population");
+    }
+  }
+
+  rebuildMetricStats() {
+    this.metricStats.clear();
+    const ids = new Set((this.project.metrics || []).map(metric => metric.id));
+    ids.add("population");
+    for (const id of ids) {
+      let max = 1;
+      let abs = 1;
+      for (const unit of this.visibleUnits) {
+        const value = Number(this.metricValue(unit, id));
+        if (!Number.isFinite(value)) continue;
+        max = Math.max(max, Math.abs(value));
+        abs = Math.max(abs, Math.abs(value));
+      }
+      this.metricStats.set(id, { max, abs });
     }
   }
 
@@ -418,7 +470,7 @@ class GeoAnalyticsApp {
         type: "Feature",
         id: unit.id,
         geometry: { type: "Point", coordinates: [unit.lon, unit.lat] },
-        properties: { ...this.featureProperties(unit), value: this.metricValue(unit), score: this.score(this.metricValue(unit)) }
+        properties: { ...this.featureProperties(unit), value: unit.value ?? this.metricValue(unit), score: unit.score ?? this.score(this.metricValue(unit)) }
       }))
     };
   }
@@ -430,7 +482,7 @@ class GeoAnalyticsApp {
         type: "Feature",
         id: unit.id,
         geometry: unit.geometry,
-        properties: { ...this.featureProperties(unit), value: this.metricValue(unit), score: this.score(this.metricValue(unit)) }
+        properties: { ...this.featureProperties(unit), value: unit.value ?? this.metricValue(unit), score: unit.score ?? this.score(this.metricValue(unit)) }
       }))
     };
   }
@@ -783,20 +835,101 @@ class GeoAnalyticsApp {
     }
   }
 
+  flowPassesFilters(flow) {
+    for (const filter of this.project.filters || []) {
+      const value = this.state.filters[filter.id] ?? filter.defaultValue ?? "all";
+      const option = (filter.options || []).find(item => item.value === value);
+      if (option?.flowTest && !option.flowTest(flow, this)) return false;
+    }
+    return true;
+  }
+
+  flowEndpoint(flow, key, byId) {
+    const explicit = flow[key];
+    if (explicit && Number.isFinite(Number(explicit.lon)) && Number.isFinite(Number(explicit.lat))) {
+      return {
+        id: explicit.id || flow[`${key}Id`] || "",
+        name: explicit.name || explicit.id || "",
+        lon: Number(explicit.lon),
+        lat: Number(explicit.lat),
+        type: explicit.type || "external",
+        region: explicit.region || ""
+      };
+    }
+    const unit = byId.get(flow[`${key}Id`]);
+    if (!unit) return null;
+    return {
+      id: unit.id,
+      name: unit.name,
+      lon: Number(unit.lon),
+      lat: Number(unit.lat),
+      type: unit.level || "unit",
+      region: unit.countryName || unit.country || ""
+    };
+  }
+
+  flowCurve(origin, destination, score, index) {
+    const start = [origin.lon, origin.lat];
+    const end = [destination.lon, destination.lat];
+    const dx = end[0] - start[0];
+    const dy = end[1] - start[1];
+    const distance = Math.hypot(dx, dy);
+    if (!Number.isFinite(distance) || distance <= 0) return [start, end];
+    const sign = index % 2 === 0 ? 1 : -1;
+    const bend = clamp(distance * (0.12 + score * 0.16), 0.35, 12) * sign;
+    const nx = -dy / distance;
+    const ny = dx / distance;
+    const control = [
+      (start[0] + end[0]) / 2 + nx * bend,
+      (start[1] + end[1]) / 2 + ny * bend
+    ];
+    const coords = [];
+    for (let i = 0; i <= 32; i += 1) {
+      const t = i / 32;
+      const a = (1 - t) * (1 - t);
+      const b = 2 * (1 - t) * t;
+      const c = t * t;
+      coords.push([
+        a * start[0] + b * control[0] + c * end[0],
+        a * start[1] + b * control[1] + c * end[1]
+      ]);
+    }
+    return coords;
+  }
+
   flowGeoJson() {
     const byId = new Map(this.allUnits.map(unit => [unit.id, unit]));
-    const flows = (this.flows || []).filter(flow => !this.state.year || Number(flow.year) === Number(this.state.year));
+    const flows = (this.flows || []).filter(flow => {
+      if (this.state.year && flow.year && Number(flow.year) !== Number(this.state.year)) return false;
+      return this.flowPassesFilters(flow);
+    });
     const max = Math.max(1, ...flows.map(flow => Math.abs(Number(flow.value || 0))));
     return {
       type: "FeatureCollection",
-      features: flows.map(flow => {
-        const origin = byId.get(flow.originId);
-        const destination = byId.get(flow.destinationId);
+      features: flows.map((flow, index) => {
+        const origin = this.flowEndpoint(flow, "origin", byId);
+        const destination = this.flowEndpoint(flow, "destination", byId);
         if (!origin || !destination) return null;
+        const score = clamp(Number(flow.value || 0) / max, 0, 1);
         return {
           type: "Feature",
-          geometry: { type: "LineString", coordinates: [[origin.lon, origin.lat], [destination.lon, destination.lat]] },
-          properties: { ...flow, score: clamp(Number(flow.value || 0) / max, 0, 1), name: `${origin.name} -> ${destination.name}` }
+          geometry: { type: "LineString", coordinates: this.flowCurve(origin, destination, score, index) },
+          properties: {
+            id: flow.id || `${origin.id}-${destination.id}-${index}`,
+            originId: origin.id,
+            destinationId: destination.id,
+            originName: origin.name,
+            destinationName: destination.name,
+            direction: flow.direction || "",
+            category: flow.category || "",
+            region: flow.region || "",
+            source: flow.source || "",
+            year: flow.year || "",
+            type: flow.type || "flow",
+            value: Number(flow.value || 0),
+            score,
+            name: flow.name || `${origin.name} -> ${destination.name}`
+          }
         };
       }).filter(Boolean)
     };
@@ -818,6 +951,38 @@ class GeoAnalyticsApp {
         }
       });
       this.map.addLayer({
+        id: "ga-flow-hit",
+        type: "line",
+        source: "ga-flow-source",
+        layout: { visibility: "none", "line-cap": "round", "line-join": "round" },
+        paint: {
+          "line-color": "rgba(0,0,0,0)",
+          "line-width": 18,
+          "line-opacity": 0
+        }
+      });
+      this.map.addLayer({
+        id: "ga-flow-arrows",
+        type: "symbol",
+        source: "ga-flow-source",
+        layout: {
+          visibility: "none",
+          "symbol-placement": "line",
+          "symbol-spacing": 120,
+          "text-field": ">",
+          "text-size": ["interpolate", ["linear"], ["get", "score"], 0, 12, 1, 20],
+          "text-keep-upright": false,
+          "text-allow-overlap": true,
+          "text-ignore-placement": true
+        },
+        paint: {
+          "text-color": ["interpolate", ["linear"], ["get", "score"], 0, "#2359d6", 1, "#c71f28"],
+          "text-halo-color": "rgba(255,255,255,0.82)",
+          "text-halo-width": 1.4,
+          "text-opacity": 0.86
+        }
+      });
+      this.map.addLayer({
         id: "ga-flow-points",
         type: "circle",
         source: "ga-units",
@@ -830,9 +995,49 @@ class GeoAnalyticsApp {
           "circle-stroke-width": 0.8
         }
       });
+      this.registerFlowEvents();
     } else {
       this.map.getSource("ga-flow-source").setData(data);
     }
+  }
+
+  flowPopupHtml(props) {
+    const value = this.metricFormatter("inMigration")(Number(props.value || 0));
+    const rows = [
+      ["Origen", props.originName || "-"],
+      ["Destino", props.destinationName || "-"],
+      ["Personas", value],
+      ["Direccion", props.direction || "-"],
+      ["Categoria", props.category || props.region || "-"],
+      ["Ano", props.year || "-"],
+      ["Fuente", props.source || "-"]
+    ];
+    return `
+      <div class="popup-title">${escapeHtml(props.name || "Flujo migratorio")}</div>
+      ${rows.map(([label, rowValue]) => `<div class="popup-row"><span>${escapeHtml(label)}:</span> ${escapeHtml(rowValue)}</div>`).join("")}
+    `;
+  }
+
+  registerFlowEvents() {
+    this.map.on("mouseenter", "ga-flow-hit", () => { this.map.getCanvas().style.cursor = "pointer"; });
+    this.map.on("mouseleave", "ga-flow-hit", () => {
+      this.map.getCanvas().style.cursor = "";
+      if (this.flowPopup) {
+        this.flowPopup.remove();
+        this.flowPopup = null;
+      }
+    });
+    this.map.on("mousemove", "ga-flow-hit", event => {
+      const props = event.features?.[0]?.properties;
+      if (!props) return;
+      if (!this.flowPopup) {
+        this.flowPopup = new maplibregl.Popup({ closeButton: false, closeOnClick: false, offset: 12 });
+      }
+      this.flowPopup
+        .setLngLat(event.lngLat)
+        .setHTML(this.flowPopupHtml(props))
+        .addTo(this.map);
+    });
   }
 
   async setMode(mode) {
@@ -872,6 +1077,7 @@ class GeoAnalyticsApp {
     if (this.map.getSource("ga-units")) this.map.getSource("ga-units").setData(this.toPointGeoJson());
     if (this.map.getSource("ga-polygons")) this.map.getSource("ga-polygons").setData(this.geometryGeoJson());
     if (this.map.getSource("ga-flow-source")) this.map.getSource("ga-flow-source").setData(this.flowGeoJson());
+    this.updateMetricPaint();
     this.cache.clear();
   }
 
@@ -882,9 +1088,31 @@ class GeoAnalyticsApp {
     this.updateRanking();
     this.updateDetail();
     this.updateLegend();
+    this.updateMetricControl();
     const metricSelect = this.root.querySelector("#rankMetric");
     if (metricSelect) metricSelect.value = this.state.activeRankMetric;
     this.setStatus(`Datos cargados. <strong>${fmt(this.visibleUnits.length)}</strong> unidades visibles.`);
+  }
+
+  updateMetricControl() {
+    const select = this.root.querySelector("#activeMetric");
+    if (select) select.value = this.state.activeMetric;
+    const hint = this.root.querySelector("[data-role='metric-hint']");
+    const metric = this.metric();
+    if (hint) hint.textContent = `${metric.label} controla color, tamanos, leyenda y seleccion actual.`;
+  }
+
+  updateMetricPaint() {
+    if (!this.map) return;
+    const color = this.colorExpression();
+    if (this.map.getLayer("ga-points")) this.map.setPaintProperty("ga-points", "circle-color", color);
+    if (this.map.getLayer("ga-bivariate")) this.map.setPaintProperty("ga-bivariate", "circle-color", color);
+    if (this.map.getLayer("ga-flow-points")) this.map.setPaintProperty("ga-flow-points", "circle-color", color);
+    if (this.map.getLayer("ga-cubes")) this.map.setPaintProperty("ga-cubes", "fill-extrusion-color", color);
+    if (this.map.getLayer("ga-fill")) {
+      this.map.setPaintProperty("ga-fill", "fill-color", ["case", ["boolean", ["get", "hasData"], true], color, "#d8dddc"]);
+    }
+    if (this.map.getLayer("ga-grid-fill")) this.map.setPaintProperty("ga-grid-fill", "fill-color", color);
   }
 
   updateCountryOptions() {
@@ -1068,6 +1296,10 @@ class GeoAnalyticsApp {
       this.map.fitBounds(view.bounds || DEFAULT_VIEW.bounds, { padding: 28, duration: this.cameraDuration(700) });
     });
     this.root.querySelector("[data-action='clear']").addEventListener("click", () => this.clearSelection());
+    const projectSwitch = this.root.querySelector("#projectSwitch");
+    if (projectSwitch) projectSwitch.addEventListener("change", event => {
+      window.location.href = event.target.value;
+    });
 
     this.root.querySelector("#countryFilter").addEventListener("change", async event => {
       this.state.activeCountry = event.target.value;
@@ -1094,6 +1326,14 @@ class GeoAnalyticsApp {
       this.state.activeRankMetric = event.target.value;
       this.updateRanking();
       this.updateDetail();
+    });
+    const activeMetric = this.root.querySelector("#activeMetric");
+    if (activeMetric) activeMetric.addEventListener("change", async event => {
+      this.state.activeMetric = event.target.value;
+      this.state.activeRankMetric = event.target.value;
+      this.cache.clear();
+      this.updateAll();
+      await this.setMode(this.state.activeMode);
     });
     this.root.querySelectorAll(".mode-btn").forEach(btn => {
       btn.addEventListener("click", () => this.setMode(btn.dataset.mode).catch(err => this.setFailure(err)));
@@ -1179,6 +1419,8 @@ class GeoAnalyticsApp {
   }
 
   prewarmModes() {
+    const limit = this.project.prewarmLimit ?? 18000;
+    if (this.project.prewarm === false || this.visibleUnits.length > limit) return;
     const run = async () => {
       try {
         if (this.project.visualizations.some(item => item.id === "cubes")) await this.ensureCubeLayer();

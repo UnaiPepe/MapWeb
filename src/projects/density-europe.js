@@ -2,6 +2,10 @@ import { pickVisualizations } from "../visualizations/registry.js";
 import { centerFromGeometry } from "../core/utils.js";
 
 const base = new URL("../../data/geographies/europe-lau/", import.meta.url);
+const projectLinks = [
+  { id: "density-europe", label: "Densidad municipal europea", href: new URL("../../projects/density-europe.html", import.meta.url).href },
+  { id: "migration-spain", label: "Migraciones municipales Espana", href: new URL("../../projects/migration-spain.html", import.meta.url).href }
+];
 
 export const COUNTRY_NAMES = {
   AT: "Austria", BE: "Belgica", BG: "Bulgaria", CH: "Suiza", CY: "Chipre",
@@ -78,6 +82,7 @@ export const densityEuropeProject = {
   subtitle: "Europa UE/EFTA · unidades LAU · densidad, poblacion y superficie desde assets particionados.",
   defaultView: "points",
   defaultMetric: "density",
+  projectLinks,
   geography: { id: "europe-lau", level: "LAU" },
   map: { center: [9.5, 48.5], zoom: 3.45, pitch: 36, bearing: -12, bounds: [[-25, 34], [35, 72]], selectZoom: 9.2 },
   metrics: [
