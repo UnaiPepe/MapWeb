@@ -74,18 +74,26 @@ class GeoAnalyticsApp {
 
   async init() {
     this.renderShell();
+    this.setupShellControls();
+    this.applyFeelMode(this.state.feel);
     this.setStatus("Preparando motor geoespacial...");
     this.map = this.createMap();
-    await this.project.load(this);
-    this.applyFilters();
-    await new Promise(resolve => this.map.on("load", resolve));
-    try { this.map.setProjection({ type: "globe" }); } catch {}
-    this.drawCoreLayers();
-    this.setupControls();
-    this.updateAll();
-    this.setMode(this.state.activeMode).catch(console.error);
-    this.applyFeelMode(this.state.feel);
-    this.prewarmModes();
+    try {
+      await this.project.load(this);
+      this.applyFilters();
+      await new Promise(resolve => {
+        if (this.map.loaded()) resolve();
+        else this.map.once("load", resolve);
+      });
+      try { this.map.setProjection({ type: "globe" }); } catch {}
+      this.drawCoreLayers();
+      this.setupControls();
+      this.updateAll();
+      this.setMode(this.state.activeMode).catch(err => this.setFailure(err));
+      this.prewarmModes();
+    } catch (err) {
+      this.setFailure(err);
+    }
   }
 
   renderShell() {
@@ -341,8 +349,11 @@ class GeoAnalyticsApp {
 
   setFailure(err) {
     console.error(err);
-    this.setStatus(`<strong>Error:</strong> ${escapeHtml(err.message)}`);
-    this.root.querySelector("[data-role='failbox']").style.display = "block";
+    const message = err?.message || String(err || "Error desconocido");
+    this.setStatus(`<strong>Error:</strong> ${escapeHtml(message)}`);
+    const failbox = this.root.querySelector("[data-role='failbox']");
+    failbox.style.display = "block";
+    failbox.querySelector("p").textContent = message;
   }
 
   metric(id = this.state.activeMetric) {
@@ -1286,22 +1297,26 @@ class GeoAnalyticsApp {
     this.selectUnit(unit, { openPopup: true, fly: true });
   }
 
+  setupShellControls() {
+    this.root.querySelector("[data-action='collapse']")?.addEventListener("click", () => document.body.classList.add("sidebar-collapsed"));
+    this.root.querySelector("[data-action='expand']")?.addEventListener("click", () => document.body.classList.remove("sidebar-collapsed"));
+    const projectSwitch = this.root.querySelector("#projectSwitch");
+    if (projectSwitch) projectSwitch.addEventListener("change", event => {
+      window.location.href = event.target.value;
+    });
+    this.setupFeelControls();
+  }
+
   setupControls() {
-    this.root.querySelector("[data-action='collapse']").addEventListener("click", () => document.body.classList.add("sidebar-collapsed"));
-    this.root.querySelector("[data-action='expand']").addEventListener("click", () => document.body.classList.remove("sidebar-collapsed"));
-    this.root.querySelector("[data-action='search']").addEventListener("click", () => this.search());
-    this.root.querySelector("#searchBox").addEventListener("keydown", event => { if (event.key === "Enter") this.search(); });
+    this.root.querySelector("[data-action='search']")?.addEventListener("click", () => this.search());
+    this.root.querySelector("#searchBox")?.addEventListener("keydown", event => { if (event.key === "Enter") this.search(); });
     this.root.querySelector("[data-action='reset']").addEventListener("click", () => {
       const view = { ...DEFAULT_VIEW, ...(this.project.map || {}) };
       this.map.fitBounds(view.bounds || DEFAULT_VIEW.bounds, { padding: 28, duration: this.cameraDuration(700) });
     });
     this.root.querySelector("[data-action='clear']").addEventListener("click", () => this.clearSelection());
-    const projectSwitch = this.root.querySelector("#projectSwitch");
-    if (projectSwitch) projectSwitch.addEventListener("change", event => {
-      window.location.href = event.target.value;
-    });
 
-    this.root.querySelector("#countryFilter").addEventListener("change", async event => {
+    this.root.querySelector("#countryFilter")?.addEventListener("change", async event => {
       this.state.activeCountry = event.target.value;
       this.setStatus("Cargando territorio...");
       if (this.project.onCountryChange) await this.project.onCountryChange(this, this.state.activeCountry);
@@ -1322,7 +1337,7 @@ class GeoAnalyticsApp {
       this.updateAll();
       this.setMode(this.state.activeMode).catch(console.error);
     });
-    this.root.querySelector("#rankMetric").addEventListener("change", event => {
+    this.root.querySelector("#rankMetric")?.addEventListener("change", event => {
       this.state.activeRankMetric = event.target.value;
       this.updateRanking();
       this.updateDetail();
@@ -1360,7 +1375,6 @@ class GeoAnalyticsApp {
       this.updateAll();
       await this.setMode(this.state.activeMode);
     });
-    this.setupFeelControls();
   }
 
   setupFeelControls() {
