@@ -64,6 +64,13 @@
       padding: 4px 0 6px;
     }
 
+    .brand-row {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 12px;
+      align-items: start;
+    }
+
     h1 {
       margin: 0 0 10px;
       font-size: clamp(24px, 3vw, 34px);
@@ -208,6 +215,45 @@
       background: #eef9f4;
     }
 
+    .icon-btn {
+      width: 38px;
+      min-height: 38px;
+      border-radius: 8px;
+      font-size: 16px;
+      line-height: 1;
+    }
+
+    .action-row {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 8px;
+    }
+
+    .action-btn {
+      width: 100%;
+      padding: 0 10px;
+      font-size: 12px;
+      text-align: center;
+    }
+
+    .control-stack {
+      display: grid;
+      gap: 10px;
+    }
+
+    .check-row {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      color: #2d3530;
+      font-size: 13px;
+    }
+
+    .check-row input {
+      width: auto;
+      min-height: auto;
+    }
+
     #topList {
       margin: 8px 0 0;
       padding-left: 20px;
@@ -224,6 +270,35 @@
     #topList li:hover {
       color: var(--blue);
       transform: translateX(2px);
+    }
+
+    .detail-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 8px;
+    }
+
+    .detail-item {
+      border: 1px solid rgba(17, 23, 20, 0.1);
+      border-radius: 8px;
+      padding: 8px;
+      background: rgba(255,255,255,0.62);
+      min-width: 0;
+    }
+
+    .detail-item b {
+      display: block;
+      overflow-wrap: anywhere;
+      font-size: 13px;
+    }
+
+    .detail-item span {
+      display: block;
+      margin-top: 2px;
+      color: var(--muted);
+      font-size: 10px;
+      line-height: 1.25;
+      text-transform: uppercase;
     }
 
     .mode-grid {
@@ -342,6 +417,80 @@
       backdrop-filter: blur(14px);
     }
 
+    .map-legend {
+      position: absolute;
+      left: 16px;
+      bottom: 32px;
+      z-index: 2;
+      width: min(360px, calc(100% - 32px));
+      border: 1px solid rgba(17, 23, 20, 0.14);
+      border-radius: 8px;
+      padding: 12px;
+      background: rgba(255,255,255,0.9);
+      box-shadow: 0 10px 30px rgba(20, 28, 24, 0.12);
+      backdrop-filter: blur(14px);
+    }
+
+    .map-legend-title {
+      margin-bottom: 8px;
+      font-size: 12px;
+      font-weight: 850;
+    }
+
+    .legend-steps {
+      display: grid;
+      grid-template-columns: repeat(5, minmax(0, 1fr));
+      gap: 4px;
+    }
+
+    .legend-step {
+      min-width: 0;
+      font-size: 10px;
+      color: #314039;
+    }
+
+    .legend-swatch {
+      display: block;
+      height: 9px;
+      border-radius: 999px;
+      margin-bottom: 4px;
+      border: 1px solid rgba(17,23,20,0.14);
+    }
+
+    .legend-note {
+      margin: 8px 0 0;
+      color: var(--muted);
+      font-size: 11px;
+      line-height: 1.35;
+    }
+
+    body.sidebar-collapsed .app {
+      grid-template-columns: 0 minmax(0, 1fr);
+    }
+
+    body.sidebar-collapsed aside {
+      transform: translateX(-100%);
+      padding: 0;
+      border: 0;
+      overflow: hidden;
+    }
+
+    body.sidebar-collapsed .sidebar-fab {
+      display: block;
+    }
+
+    .sidebar-fab {
+      display: none;
+      position: absolute;
+      left: 16px;
+      top: 16px;
+      z-index: 4;
+      width: auto;
+      padding: 0 12px;
+      background: rgba(255,255,255,0.92);
+      box-shadow: 0 10px 30px rgba(20, 28, 24, 0.12);
+    }
+
     .failbox {
       display: none;
       position: absolute;
@@ -420,6 +569,15 @@
         justify-content: flex-end;
         flex-wrap: wrap;
       }
+      .map-legend {
+        left: 10px;
+        right: 10px;
+        bottom: 86px;
+        width: auto;
+      }
+      body.sidebar-collapsed .app {
+        grid-template-columns: 1fr;
+      }
     }
 
     @media (max-width: 620px) {
@@ -439,8 +597,13 @@
   <div class="app">
     <aside>
       <header class="brand">
-        <h1>Densidad municipal europea</h1>
-        <p class="subtitle">Europa UE/EFTA · unidades LAU · densidad normalizada a partir de Eurostat/GISCO 2024, INE e INSEE.</p>
+        <div class="brand-row">
+          <div>
+            <h1>Densidad municipal europea</h1>
+            <p class="subtitle">Europa UE/EFTA · unidades LAU · densidad normalizada a partir de Eurostat/GISCO 2024, INE e INSEE.</p>
+          </div>
+          <button id="collapseBtn" class="icon-btn" title="Plegar panel" aria-label="Plegar panel">‹</button>
+        </div>
       </header>
 
       <section class="dashboard">
@@ -479,6 +642,27 @@
           <p class="hint">El filtro reduce las capas pesadas y ayuda a comparar países concretos.</p>
         </div>
 
+        <div class="panel">
+          <span class="label">Filtros</span>
+          <div class="control-stack">
+            <select id="densityFilter" aria-label="Filtrar por densidad">
+              <option value="all">Densidad: todas</option>
+              <option value="low">Baja: menos de 50 hab/km2</option>
+              <option value="medium">Media: 50-500 hab/km2</option>
+              <option value="high">Alta: 500-5.000 hab/km2</option>
+              <option value="extreme">Extrema: más de 5.000 hab/km2</option>
+            </select>
+            <select id="populationFilter" aria-label="Filtrar por población">
+              <option value="all">Población: todas</option>
+              <option value="lt1k">Menos de 1.000</option>
+              <option value="1k10k">1.000-10.000</option>
+              <option value="10k100k">10.000-100.000</option>
+              <option value="gt100k">Más de 100.000</option>
+            </select>
+            <label class="check-row"><input id="hideNoData" type="checkbox" /> Ocultar sin datos</label>
+          </div>
+        </div>
+
         <div class="panel modes-panel">
           <span class="label">Modo visual</span>
           <div class="mode-grid" role="tablist" aria-label="Modos de visualización">
@@ -489,12 +673,43 @@
             <button class="mode-btn" data-mode="grid" role="tab" aria-selected="false"><span>▦</span><span>Grid</span></button>
             <button class="mode-btn" data-mode="bivariate" role="tab" aria-selected="false"><span>◉</span><span>Bivariante</span></button>
           </div>
+          <div class="control-stack" style="margin-top: 10px;">
+            <select id="cubeHeightMode" aria-label="Altura de cubos 3D">
+              <option value="soft">Cubos: altura suave</option>
+              <option value="medium" selected>Cubos: altura media</option>
+              <option value="dramatic">Cubos: altura dramática</option>
+            </select>
+            <select id="gridSizeMode" aria-label="Tamaño de grid">
+              <option value="fine">Grid fino</option>
+              <option value="medium" selected>Grid medio</option>
+              <option value="large">Grid grande</option>
+            </select>
+          </div>
           <p id="modeHint" class="hint">Puntos municipales coloreados por densidad.</p>
         </div>
 
         <div class="panel">
-          <span class="label">Top densidad</span>
+          <label class="label" for="rankMetric">Ranking</label>
+          <select id="rankMetric">
+            <option value="density">Densidad</option>
+            <option value="population">Población</option>
+            <option value="area">Superficie</option>
+          </select>
+          <p id="rankTitle" class="hint">Ranking europeo por densidad.</p>
           <ol id="topList"></ol>
+        </div>
+
+        <div class="panel">
+          <span class="label">Detalle</span>
+          <div id="detailPanel" class="note">Selecciona una unidad LAU para ver ranking, percentil y fuente.</div>
+        </div>
+
+        <div class="panel">
+          <span class="label">Mapa</span>
+          <div class="action-row">
+            <button id="resetViewBtn" class="action-btn">Volver a Europa</button>
+            <button id="clearSelectionBtn" class="action-btn">Limpiar selección</button>
+          </div>
         </div>
       </section>
 
@@ -509,9 +724,21 @@
 
     <main>
       <div id="map"></div>
+      <button id="expandBtn" class="sidebar-fab">Mostrar panel</button>
       <div class="map-tools" aria-hidden="true">
         <div class="tool-chip">Mapa HD</div>
         <div class="tool-chip">Globo 3D suave</div>
+      </div>
+      <div id="mapLegend" class="map-legend">
+        <div class="map-legend-title">Densidad de población</div>
+        <div class="legend-steps">
+          <div class="legend-step"><span class="legend-swatch" style="background:#f8fff4"></span>0-50</div>
+          <div class="legend-step"><span class="legend-swatch" style="background:#c6f27a"></span>50-500</div>
+          <div class="legend-step"><span class="legend-swatch" style="background:#ffd857"></span>500-1k</div>
+          <div class="legend-step"><span class="legend-swatch" style="background:#f17745"></span>1k-5k</div>
+          <div class="legend-step"><span class="legend-swatch" style="background:#c71f28"></span>+5k</div>
+        </div>
+        <p id="legendModeNote" class="legend-note">Color = densidad. Gris = sin datos.</p>
       </div>
       <div id="failbox" class="failbox">
         <h2>No se pudieron cargar los datos externos</h2>
@@ -614,6 +841,13 @@ let maxDensity = 1;
 let maxPopulation = 1;
 let activeMode = "points";
 let activeCountry = "all";
+let activeRankMetric = "density";
+let activeDensityFilter = "all";
+let activePopulationFilter = "all";
+let hideNoData = false;
+let cubeHeightMode = "medium";
+let gridSizeMode = "medium";
+let selectedMunicipality = null;
 let polygonDataPromise = null;
 
 function setStatus(html) {
@@ -696,6 +930,70 @@ function densityScore(density) {
 
 function populationScore(population) {
   return Math.max(0, Math.min(1, Math.log10(population + 1) / Math.log10(maxPopulation + 1)));
+}
+
+function passesDensityFilter(m) {
+  if (activeDensityFilter === "all") return true;
+  if (!m.hasData) return false;
+  if (activeDensityFilter === "low") return m.density < 50;
+  if (activeDensityFilter === "medium") return m.density >= 50 && m.density < 500;
+  if (activeDensityFilter === "high") return m.density >= 500 && m.density < 5000;
+  if (activeDensityFilter === "extreme") return m.density >= 5000;
+  return true;
+}
+
+function passesPopulationFilter(m) {
+  if (activePopulationFilter === "all") return true;
+  if (!m.hasData) return false;
+  if (activePopulationFilter === "lt1k") return m.population < 1000;
+  if (activePopulationFilter === "1k10k") return m.population >= 1000 && m.population < 10000;
+  if (activePopulationFilter === "10k100k") return m.population >= 10000 && m.population < 100000;
+  if (activePopulationFilter === "gt100k") return m.population >= 100000;
+  return true;
+}
+
+function countryPool(country = activeCountry) {
+  return country === "all" ? allMunicipalities : allMunicipalities.filter(m => m.country === country);
+}
+
+function getVisibleMunicipalities() {
+  return countryPool().filter(m =>
+    (!hideNoData || m.hasData) &&
+    passesDensityFilter(m) &&
+    passesPopulationFilter(m)
+  );
+}
+
+function rankValue(m, metric = activeRankMetric) {
+  if (metric === "population") return m.population;
+  if (metric === "area") return m.area;
+  return m.density;
+}
+
+function rankUnit(metric = activeRankMetric) {
+  if (metric === "population") return "hab.";
+  if (metric === "area") return "km2";
+  return "hab/km2";
+}
+
+function rankLabel(metric = activeRankMetric) {
+  if (metric === "population") return "población";
+  if (metric === "area") return "superficie";
+  return "densidad";
+}
+
+function sortedForRanking(data, metric = activeRankMetric) {
+  return data
+    .filter(m => m.hasData && Number.isFinite(rankValue(m, metric)) && rankValue(m, metric) > 0)
+    .sort((a, b) => rankValue(b, metric) - rankValue(a, metric));
+}
+
+function rankOf(m, data, metric = activeRankMetric) {
+  const ranked = sortedForRanking(data, metric);
+  const idx = ranked.findIndex(item => item.code === m.code);
+  if (idx < 0) return { rank: null, total: ranked.length, percentile: null };
+  const percentile = ranked.length > 1 ? Math.round((1 - idx / (ranked.length - 1)) * 100) : 100;
+  return { rank: idx + 1, total: ranked.length, percentile };
 }
 
 async function fetchText(url, encoding = "utf-8") {
@@ -836,6 +1134,7 @@ function squareAround(lon, lat, km = 4) {
 }
 
 function buildCubeGeoJson(data) {
+  const heightMax = cubeHeightMode === "soft" ? 26000 : cubeHeightMode === "dramatic" ? 90000 : 60000;
   return {
     type: "FeatureCollection",
     features: data.map(m => {
@@ -848,7 +1147,7 @@ function buildCubeGeoJson(data) {
           ...m,
           densityScore: dScore,
           populationScore: populationScore(m.population),
-          height: Math.round(1000 + Math.pow(dScore, 1.45) * 60000)
+          height: Math.round(800 + Math.pow(dScore, 1.45) * heightMax)
         }
       };
     })
@@ -856,7 +1155,7 @@ function buildCubeGeoJson(data) {
 }
 
 function buildGridGeoJson(data) {
-  const cell = 0.42;
+  const cell = gridSizeMode === "fine" ? 0.26 : gridSizeMode === "large" ? 0.72 : 0.42;
   const cells = new Map();
   for (const m of data) {
     const x = Math.floor(m.lon / cell);
@@ -1221,7 +1520,22 @@ async function setMode(mode) {
     map.easeTo({ pitch: window.innerWidth < 620 ? 22 : 36, bearing: -8, duration: 650 });
   }
 
+  updateMapLegend();
   setStatus(`Modo activo: <strong>${MODE_HINTS[mode]}</strong>`);
+}
+
+function updateMapLegend() {
+  const note = document.getElementById("legendModeNote");
+  if (!note) return;
+  if (activeMode === "bivariate") {
+    note.textContent = "Bivariante: color = densidad; tamaño y borde = población.";
+  } else if (activeMode === "cubes") {
+    note.textContent = `Cubos 3D: color = densidad; altura ${cubeHeightMode}.`;
+  } else if (activeMode === "grid") {
+    note.textContent = `Grid: celdas agregadas con tamaño ${gridSizeMode}. Gris = sin datos.`;
+  } else {
+    note.textContent = `${MODE_HINTS[activeMode]} Gris = sin datos.`;
+  }
 }
 
 function setupModes() {
@@ -1291,7 +1605,7 @@ async function loadEuropeAsset() {
 
 function applyFilteredData(country = "all") {
   activeCountry = country;
-  municipalities = country === "all" ? [...allMunicipalities] : allMunicipalities.filter(m => m.country === country);
+  municipalities = getVisibleMunicipalities();
   maxDensity = Math.max(1, ...municipalities.filter(m => m.hasData).map(m => m.density));
   maxPopulation = Math.max(1, ...municipalities.filter(m => m.hasData).map(m => m.population));
   municipalitiesByCode = new Map(municipalities.map(m => [m.code, m]));
@@ -1316,6 +1630,15 @@ function refreshVisibleSources() {
   if (map.getSource("municipal-polygons")) map.getSource("municipal-polygons").setData(currentPolygonData());
   if (map.getSource("municipal-cubes")) map.getSource("municipal-cubes").setData(buildCubeGeoJson(municipalities.filter(m => m.hasData)));
   if (map.getSource("density-grid")) map.getSource("density-grid").setData(buildGridGeoJson(municipalities.filter(m => m.hasData)));
+}
+
+function refreshAll() {
+  applyFilteredData(activeCountry);
+  refreshVisibleSources();
+  updateUI(municipalities);
+  updateDetailPanel(selectedMunicipality);
+  updateMapLegend();
+  setMode(activeMode).catch(console.error);
 }
 
 async function loadMunicipalPolygons() {
@@ -1381,11 +1704,43 @@ function setupCountryFilter() {
     `<option value="${escapeHtml(code)}">${escapeHtml(COUNTRY_NAMES[code] || code)} (${escapeHtml(code)})</option>`
   ).join("");
   select.addEventListener("change", () => {
-    applyFilteredData(select.value);
-    refreshVisibleSources();
-    updateUI(municipalities);
-    setMode(activeMode).catch(console.error);
+    activeCountry = select.value;
+    refreshAll();
   });
+}
+
+function setupAnalysisControls() {
+  document.getElementById("densityFilter").addEventListener("change", e => {
+    activeDensityFilter = e.target.value;
+    refreshAll();
+  });
+  document.getElementById("populationFilter").addEventListener("change", e => {
+    activePopulationFilter = e.target.value;
+    refreshAll();
+  });
+  document.getElementById("hideNoData").addEventListener("change", e => {
+    hideNoData = e.target.checked;
+    refreshAll();
+  });
+  document.getElementById("rankMetric").addEventListener("change", e => {
+    activeRankMetric = e.target.value;
+    updateUI(municipalities);
+    updateDetailPanel(selectedMunicipality);
+  });
+  document.getElementById("cubeHeightMode").addEventListener("change", e => {
+    cubeHeightMode = e.target.value;
+    if (map.getSource("municipal-cubes")) map.getSource("municipal-cubes").setData(buildCubeGeoJson(municipalities.filter(m => m.hasData)));
+  });
+  document.getElementById("gridSizeMode").addEventListener("change", e => {
+    gridSizeMode = e.target.value;
+    if (map.getSource("density-grid")) map.getSource("density-grid").setData(buildGridGeoJson(municipalities.filter(m => m.hasData)));
+  });
+  document.getElementById("resetViewBtn").addEventListener("click", () => {
+    map.fitBounds([[-25, 34], [35, 72]], { padding: 28, duration: 700 });
+  });
+  document.getElementById("clearSelectionBtn").addEventListener("click", clearSelection);
+  document.getElementById("collapseBtn").addEventListener("click", () => document.body.classList.add("sidebar-collapsed"));
+  document.getElementById("expandBtn").addEventListener("click", () => document.body.classList.remove("sidebar-collapsed"));
 }
 
 async function ensurePolygonLayers() {
@@ -1451,13 +1806,16 @@ function updateUI(data, period) {
   document.getElementById("m-year").textContent = fmt(new Set(data.map(d => d.country)).size);
   document.getElementById("m-total").textContent = fmt(totalPop);
 
-  document.getElementById("topList").innerHTML = data.filter(d => d.hasData).slice(0, 10).map(d =>
-    `<li data-code="${escapeHtml(d.code)}"><strong>${escapeHtml(d.name)}</strong>: ${fmt(d.density, 0)} hab/km2</li>`
+  document.getElementById("rankTitle").textContent =
+    `Ranking ${activeCountry === "all" ? "europeo" : "nacional"} por ${rankLabel()}.`;
+  const ranked = sortedForRanking(data, activeRankMetric).slice(0, 10);
+  document.getElementById("topList").innerHTML = ranked.map(d =>
+    `<li data-code="${escapeHtml(d.code)}"><strong>${escapeHtml(d.name)}</strong>: ${fmt(rankValue(d), activeRankMetric === "area" ? 1 : 0)} ${rankUnit()}</li>`
   ).join("");
 
   document.querySelectorAll("#topList li").forEach(item => {
     item.addEventListener("click", () => {
-      const m = municipalities.find(d => d.code === item.dataset.code);
+      const m = allMunicipalities.find(d => d.code === item.dataset.code);
       if (m) selectMunicipality(m, { openPopup: true, fly: true });
     });
   });
@@ -1466,9 +1824,11 @@ function updateUI(data, period) {
 }
 
 function selectMunicipality(m, options = {}) {
+  selectedMunicipality = m;
   selectedCode = m.code;
   if (map.getLayer("municipal-selected")) map.setFilter("municipal-selected", ["==", ["get", "code"], selectedCode]);
   if (map.getLayer("municipal-selected-fill")) map.setFilter("municipal-selected-fill", ["==", ["get", "code"], selectedCode]);
+  updateDetailPanel(m);
 
   if (options.fly !== false) {
     map.flyTo({
@@ -1490,6 +1850,37 @@ function selectMunicipality(m, options = {}) {
   }
 }
 
+function updateDetailPanel(m) {
+  const el = document.getElementById("detailPanel");
+  if (!m) {
+    el.innerHTML = "Selecciona una unidad LAU para ver ranking, percentil y fuente.";
+    return;
+  }
+  const europeRank = rankOf(m, allMunicipalities, activeRankMetric);
+  const nationalRank = rankOf(m, allMunicipalities.filter(item => item.country === m.country), activeRankMetric);
+  el.innerHTML = `
+    <div class="popup-title">${escapeHtml(m.name)}</div>
+    <div class="detail-grid">
+      <div class="detail-item"><b>${escapeHtml(m.countryName || m.country)}</b><span>país</span></div>
+      <div class="detail-item"><b>${fmt(m.density, 1)}</b><span>hab/km2</span></div>
+      <div class="detail-item"><b>${fmt(m.population)}</b><span>población</span></div>
+      <div class="detail-item"><b>${fmt(m.area, 1)}</b><span>km2</span></div>
+      <div class="detail-item"><b>${europeRank.rank ? `${fmt(europeRank.rank)} / ${fmt(europeRank.total)}` : "-"}</b><span>ranking Europa</span></div>
+      <div class="detail-item"><b>${nationalRank.rank ? `${fmt(nationalRank.rank)} / ${fmt(nationalRank.total)}` : "-"}</b><span>ranking país</span></div>
+      <div class="detail-item"><b>${europeRank.percentile ?? "-"}%</b><span>percentil europeo</span></div>
+      <div class="detail-item"><b>${escapeHtml(m.source || "-")}</b><span>fuente</span></div>
+    </div>
+  `;
+}
+
+function clearSelection() {
+  selectedMunicipality = null;
+  selectedCode = "";
+  if (map.getLayer("municipal-selected")) map.setFilter("municipal-selected", ["==", ["get", "code"], ""]);
+  if (map.getLayer("municipal-selected-fill")) map.setFilter("municipal-selected-fill", ["==", ["get", "code"], ""]);
+  updateDetailPanel(null);
+}
+
 function setupSearch() {
   const input = document.getElementById("searchBox");
   const hint = document.getElementById("searchHint");
@@ -1504,6 +1895,18 @@ function setupSearch() {
     if (!m) {
       hint.textContent = "No encuentro ese municipio en el dataset cargado.";
       return;
+    }
+    const hiddenByFilters = hideNoData && !m.hasData || !passesDensityFilter(m) || !passesPopulationFilter(m);
+    if ((activeCountry !== "all" && m.country !== activeCountry) || hiddenByFilters) {
+      activeCountry = m.country;
+      activeDensityFilter = "all";
+      activePopulationFilter = "all";
+      hideNoData = false;
+      document.getElementById("countryFilter").value = m.country;
+      document.getElementById("densityFilter").value = "all";
+      document.getElementById("populationFilter").value = "all";
+      document.getElementById("hideNoData").checked = false;
+      refreshAll();
     }
     hint.textContent = `${m.name}: ${fmt(m.density, 1)} hab/km2.`;
     if (activeMode === "heatmap") setMode("points").catch(console.error);
@@ -1528,6 +1931,8 @@ function setupSearch() {
     setupSearch();
     setupModes();
     setupCountryFilter();
+    setupAnalysisControls();
+    updateMapLegend();
   } catch (err) {
     console.error(err);
     setStatus(`<strong>Error:</strong> ${escapeHtml(err.message)}`);
