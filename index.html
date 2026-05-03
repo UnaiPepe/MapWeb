@@ -853,9 +853,9 @@
           </div>
           <div class="control-stack" style="margin-top: 10px;">
             <select id="cubeHeightMode" aria-label="Altura de cubos 3D">
-              <option value="soft">Cubos: altura suave</option>
-              <option value="medium" selected>Cubos: altura media</option>
-              <option value="dramatic">Cubos: altura dramática</option>
+              <option value="soft">Cubos: altura alta</option>
+              <option value="medium" selected>Cubos: altura detalle</option>
+              <option value="dramatic">Cubos: altura extrema</option>
             </select>
             <select id="gridSizeMode" aria-label="Tamaño de grid">
               <option value="fine">Grid fino</option>
@@ -1014,6 +1014,7 @@ let allMunicipalities = [];
 let polygonFeatures = [];
 let assetMetadata = {};
 let municipalitiesByCode = new Map();
+let allMunicipalitiesByCode = new Map();
 let selectedCode = "";
 let hoveredCode = "";
 let maxDensity = 1;
@@ -1029,6 +1030,8 @@ let gridSizeMode = "medium";
 let activeFeel = localStorage.getItem("mapFeelMode") || "static";
 let selectedMunicipality = null;
 let polygonDataPromise = null;
+let renderCache = { cubes: new Map(), grid: new Map() };
+let lastSourceKeys = { points: "", polygons: "", cubes: "", grid: "" };
 
 function setStatus(html) {
   document.getElementById("status").innerHTML = html;
@@ -1373,28 +1376,79 @@ function squareAround(lon, lat, km = 4) {
   ]];
 }
 
+function visibleCacheKey(extra = "") {
+  return [
+    activeCountry,
+    activeDensityFilter,
+    activePopulationFilter,
+    hideNoData ? "hide" : "show",
+    municipalities.length,
+    Math.round(maxDensity),
+    Math.round(maxPopulation),
+    extra
+  ].join("|");
+}
+
+function limitedCacheSet(cache, key, value, limit = 8) {
+  if (cache.size >= limit && !cache.has(key)) {
+    cache.delete(cache.keys().next().value);
+  }
+  cache.set(key, value);
+  return value;
+}
+
+function cubeHeightMax() {
+  if (cubeHeightMode === "soft") return 50000;
+  if (cubeHeightMode === "dramatic") return 240000;
+  return 130000;
+}
+
+function cubeHeightLabel() {
+  if (cubeHeightMode === "soft") return "alta";
+  if (cubeHeightMode === "dramatic") return "extrema";
+  return "detalle";
+}
+
+function cubeFootprintKm(m) {
+  const pScore = populationScore(m.population);
+  const dScore = densityScore(m.density);
+  const areaSide = Number.isFinite(m.area) && m.area > 0 ? Math.sqrt(m.area) : 1;
+  const areaHint = Math.max(0.35, Math.min(2.4, areaSide * 0.08));
+  const populationHint = Math.pow(pScore, 1.55) * 5.2;
+  const denseNarrowing = 1 - dScore * 0.34;
+  return Math.max(0.45, Math.min(6.4, (0.65 + areaHint + populationHint) * denseNarrowing));
+}
+
 function buildCubeGeoJson(data) {
-  const heightMax = cubeHeightMode === "soft" ? 26000 : cubeHeightMode === "dramatic" ? 90000 : 60000;
-  return {
+  const key = visibleCacheKey(`cubes:${cubeHeightMode}`);
+  if (renderCache.cubes.has(key)) return renderCache.cubes.get(key);
+  const heightMax = cubeHeightMax();
+  const features = data.map(m => {
+    const dScore = densityScore(m.density);
+    const pScore = populationScore(m.population);
+    const footprintKm = cubeFootprintKm(m);
+    return {
+      type: "Feature",
+      id: m.code,
+      geometry: { type: "Polygon", coordinates: squareAround(m.lon, m.lat, footprintKm) },
+      properties: {
+        ...m,
+        densityScore: dScore,
+        populationScore: pScore,
+        footprintKm,
+        height: Math.round(1200 + Math.pow(dScore, 1.18) * heightMax)
+      }
+    };
+  });
+  return limitedCacheSet(renderCache.cubes, key, {
     type: "FeatureCollection",
-    features: data.map(m => {
-      const dScore = densityScore(m.density);
-      return {
-        type: "Feature",
-        id: m.code,
-        geometry: { type: "Polygon", coordinates: squareAround(m.lon, m.lat, 2.2 + populationScore(m.population) * 2.8) },
-        properties: {
-          ...m,
-          densityScore: dScore,
-          populationScore: populationScore(m.population),
-          height: Math.round(800 + Math.pow(dScore, 1.45) * heightMax)
-        }
-      };
-    })
-  };
+    features
+  });
 }
 
 function buildGridGeoJson(data) {
+  const key = visibleCacheKey(`grid:${gridSizeMode}`);
+  if (renderCache.grid.has(key)) return renderCache.grid.get(key);
   const cell = gridSizeMode === "fine" ? 0.26 : gridSizeMode === "large" ? 0.72 : 0.42;
   const cells = new Map();
   for (const m of data) {
@@ -1408,7 +1462,7 @@ function buildGridGeoJson(data) {
     cells.set(key, prev);
   }
 
-  return {
+  return limitedCacheSet(renderCache.grid, key, {
     type: "FeatureCollection",
     features: [...cells.values()].filter(c => c.area > 0).map(c => {
       const west = c.x * cell;
@@ -1438,7 +1492,7 @@ function buildGridGeoJson(data) {
         }
       };
     })
-  };
+  });
 }
 
 async function loadMunicipalPolygons() {
@@ -1770,7 +1824,7 @@ function updateMapLegend() {
   if (activeMode === "bivariate") {
     note.textContent = "Bivariante: color = densidad; tamaño y borde = población.";
   } else if (activeMode === "cubes") {
-    note.textContent = `Cubos 3D: color = densidad; altura ${cubeHeightMode}.`;
+    note.textContent = `Cubos 3D: color = densidad; altura ${cubeHeightLabel()} y ancho variable por población/superficie.`;
   } else if (activeMode === "grid") {
     note.textContent = `Grid: celdas agregadas con tamaño ${gridSizeMode}. Gris = sin datos.`;
   } else {
@@ -1841,6 +1895,7 @@ async function loadEuropeAsset() {
     return m;
   }).filter(m => m.code);
   allMunicipalities.sort((a, b) => b.density - a.density);
+  allMunicipalitiesByCode = new Map(allMunicipalities.map(m => [m.code, m]));
 }
 
 function applyFilteredData(country = "all") {
@@ -1854,7 +1909,7 @@ function applyFilteredData(country = "all") {
     m.populationScore = m.hasData ? populationScore(m.population) : 0;
   }
   for (const feature of polygonFeatures) {
-    const m = municipalitiesByCode.get(feature.properties.code) || allMunicipalities.find(item => item.code === feature.properties.code);
+    const m = municipalitiesByCode.get(feature.properties.code) || allMunicipalitiesByCode.get(feature.properties.code);
     if (!m) continue;
     feature.properties = { ...feature.properties, ...m, densityScore: m.densityScore || 0, populationScore: m.populationScore || 0 };
   }
@@ -1866,10 +1921,25 @@ function currentPolygonData() {
 }
 
 function refreshVisibleSources() {
-  if (map.getSource("municipalities")) map.getSource("municipalities").setData(toGeoJson(municipalities));
-  if (map.getSource("municipal-polygons")) map.getSource("municipal-polygons").setData(currentPolygonData());
-  if (map.getSource("municipal-cubes")) map.getSource("municipal-cubes").setData(buildCubeGeoJson(municipalities.filter(m => m.hasData)));
-  if (map.getSource("density-grid")) map.getSource("density-grid").setData(buildGridGeoJson(municipalities.filter(m => m.hasData)));
+  const baseKey = visibleCacheKey();
+  if (map.getSource("municipalities") && lastSourceKeys.points !== baseKey) {
+    map.getSource("municipalities").setData(toGeoJson(municipalities));
+    lastSourceKeys.points = baseKey;
+  }
+  if (map.getSource("municipal-polygons") && lastSourceKeys.polygons !== baseKey) {
+    map.getSource("municipal-polygons").setData(currentPolygonData());
+    lastSourceKeys.polygons = baseKey;
+  }
+  const cubeKey = visibleCacheKey(`cubes:${cubeHeightMode}`);
+  if (map.getSource("municipal-cubes") && lastSourceKeys.cubes !== cubeKey) {
+    map.getSource("municipal-cubes").setData(buildCubeGeoJson(municipalities.filter(m => m.hasData)));
+    lastSourceKeys.cubes = cubeKey;
+  }
+  const gridKey = visibleCacheKey(`grid:${gridSizeMode}`);
+  if (map.getSource("density-grid") && lastSourceKeys.grid !== gridKey) {
+    map.getSource("density-grid").setData(buildGridGeoJson(municipalities.filter(m => m.hasData)));
+    lastSourceKeys.grid = gridKey;
+  }
 }
 
 function refreshAll() {
@@ -1881,17 +1951,44 @@ function refreshAll() {
   setMode(activeMode).catch(console.error);
 }
 
+function prewarmHeavyModes() {
+  const run = async () => {
+    try {
+      ensureCubeLayers();
+      ensureGridLayers();
+      await ensurePolygonLayers();
+      for (const ids of Object.values(MODE_LAYERS)) setLayerVisibility(ids, "none");
+      setLayerVisibility(MODE_LAYERS[activeMode], "visible");
+      if (map.getLayer("municipal-selected-fill")) {
+        map.setLayoutProperty("municipal-selected-fill", "visibility", activeMode === "choropleth" ? "visible" : "none");
+      }
+    } catch (err) {
+      console.warn("No se pudieron precalentar todos los modos", err);
+    }
+  };
+  if ("requestIdleCallback" in window) {
+    window.requestIdleCallback(run, { timeout: 2500 });
+  } else {
+    window.setTimeout(run, 900);
+  }
+}
+
 async function loadMunicipalPolygons() {
   return currentPolygonData();
 }
 
 function ensureCubeLayers() {
+  const cubeKey = visibleCacheKey(`cubes:${cubeHeightMode}`);
   const cubeData = buildCubeGeoJson(municipalities.filter(m => m.hasData));
   if (map.getSource("municipal-cubes")) {
-    map.getSource("municipal-cubes").setData(cubeData);
+    if (lastSourceKeys.cubes !== cubeKey) {
+      map.getSource("municipal-cubes").setData(cubeData);
+      lastSourceKeys.cubes = cubeKey;
+    }
     return;
   }
   map.addSource("municipal-cubes", { type: "geojson", data: cubeData, promoteId: "code" });
+  lastSourceKeys.cubes = cubeKey;
   map.addLayer({
     id: "municipal-cubes",
     type: "fill-extrusion",
@@ -1908,12 +2005,17 @@ function ensureCubeLayers() {
 }
 
 function ensureGridLayers() {
+  const gridKey = visibleCacheKey(`grid:${gridSizeMode}`);
   const gridData = buildGridGeoJson(municipalities.filter(m => m.hasData));
   if (map.getSource("density-grid")) {
-    map.getSource("density-grid").setData(gridData);
+    if (lastSourceKeys.grid !== gridKey) {
+      map.getSource("density-grid").setData(gridData);
+      lastSourceKeys.grid = gridKey;
+    }
     return;
   }
   map.addSource("density-grid", { type: "geojson", data: gridData });
+  lastSourceKeys.grid = gridKey;
   map.addLayer({
     id: "grid-fill",
     type: "fill",
@@ -1969,11 +2071,21 @@ function setupAnalysisControls() {
   });
   document.getElementById("cubeHeightMode").addEventListener("change", e => {
     cubeHeightMode = e.target.value;
-    if (map.getSource("municipal-cubes")) map.getSource("municipal-cubes").setData(buildCubeGeoJson(municipalities.filter(m => m.hasData)));
+    const cubeKey = visibleCacheKey(`cubes:${cubeHeightMode}`);
+    if (map.getSource("municipal-cubes") && lastSourceKeys.cubes !== cubeKey) {
+      map.getSource("municipal-cubes").setData(buildCubeGeoJson(municipalities.filter(m => m.hasData)));
+      lastSourceKeys.cubes = cubeKey;
+    }
+    updateMapLegend();
   });
   document.getElementById("gridSizeMode").addEventListener("change", e => {
     gridSizeMode = e.target.value;
-    if (map.getSource("density-grid")) map.getSource("density-grid").setData(buildGridGeoJson(municipalities.filter(m => m.hasData)));
+    const gridKey = visibleCacheKey(`grid:${gridSizeMode}`);
+    if (map.getSource("density-grid") && lastSourceKeys.grid !== gridKey) {
+      map.getSource("density-grid").setData(buildGridGeoJson(municipalities.filter(m => m.hasData)));
+      lastSourceKeys.grid = gridKey;
+    }
+    updateMapLegend();
   });
   document.getElementById("resetViewBtn").addEventListener("click", () => {
     map.fitBounds([[-25, 34], [35, 72]], { padding: 28, duration: cameraDuration(700) });
@@ -1984,13 +2096,18 @@ function setupAnalysisControls() {
 }
 
 async function ensurePolygonLayers() {
+  const polygonKey = visibleCacheKey();
   const polygonData = currentPolygonData();
   if (map.getSource("municipal-polygons")) {
-    map.getSource("municipal-polygons").setData(polygonData);
+    if (lastSourceKeys.polygons !== polygonKey) {
+      map.getSource("municipal-polygons").setData(polygonData);
+      lastSourceKeys.polygons = polygonKey;
+    }
     return;
   }
 
   map.addSource("municipal-polygons", { type: "geojson", data: polygonData, promoteId: "code" });
+  lastSourceKeys.polygons = polygonKey;
   map.addLayer({
     id: "municipal-fill",
     type: "fill",
@@ -2179,6 +2296,7 @@ function setupSearch() {
     setupFeelControls();
     applyFeelMode(activeFeel);
     updateMapLegend();
+    prewarmHeavyModes();
   } catch (err) {
     console.error(err);
     setStatus(`<strong>Error:</strong> ${escapeHtml(err.message)}`);
