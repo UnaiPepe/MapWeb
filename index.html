@@ -13,6 +13,7 @@
   <script src="https://unpkg.com/maplibre-gl@5.6.2/dist/maplibre-gl.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/topojson-client@3/dist/topojson-client.min.js"></script>
   <style>
     :root {
       --bg: #f8faf8;
@@ -225,6 +226,51 @@
       transform: translateX(2px);
     }
 
+    .mode-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 8px;
+    }
+
+    .mode-btn {
+      width: 100%;
+      min-height: 48px;
+      display: grid;
+      grid-template-columns: auto minmax(0, 1fr);
+      align-items: center;
+      gap: 8px;
+      padding: 8px 10px;
+      text-align: left;
+      border-color: rgba(17, 23, 20, 0.14);
+      background: rgba(255, 255, 255, 0.72);
+    }
+
+    .mode-btn span:first-child {
+      display: grid;
+      place-items: center;
+      width: 24px;
+      height: 24px;
+      border-radius: 50%;
+      background: rgba(15, 143, 102, 0.1);
+      color: #0c6d50;
+      font-size: 13px;
+      font-weight: 900;
+    }
+
+    .mode-btn span:last-child {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      font-size: 12px;
+      font-weight: 800;
+    }
+
+    .mode-btn.is-active {
+      border-color: rgba(35, 89, 214, 0.58);
+      background: #edf4ff;
+      box-shadow: 0 0 0 3px rgba(35, 89, 214, 0.12);
+    }
+
     main {
       position: relative;
       min-height: 100dvh;
@@ -352,6 +398,18 @@
         grid-template-columns: repeat(2, minmax(0, 1fr));
         gap: 12px;
       }
+      .modes-panel {
+        grid-column: 1 / -1;
+      }
+      .mode-grid {
+        display: flex;
+        overflow-x: auto;
+        padding-bottom: 2px;
+        scrollbar-width: thin;
+      }
+      .mode-btn {
+        min-width: 132px;
+      }
       .panel { margin: 0; }
       .sources { display: none; }
       main { min-height: 68dvh; }
@@ -413,6 +471,19 @@
           <p id="searchHint" class="hint"></p>
         </div>
 
+        <div class="panel modes-panel">
+          <span class="label">Modo visual</span>
+          <div class="mode-grid" role="tablist" aria-label="Modos de visualización">
+            <button class="mode-btn is-active" data-mode="points" role="tab" aria-selected="true"><span>●</span><span>Puntos</span></button>
+            <button class="mode-btn" data-mode="choropleth" role="tab" aria-selected="false"><span>▧</span><span>Municipios</span></button>
+            <button class="mode-btn" data-mode="heatmap" role="tab" aria-selected="false"><span>≈</span><span>Densidad</span></button>
+            <button class="mode-btn" data-mode="cubes" role="tab" aria-selected="false"><span>▥</span><span>Cubos 3D</span></button>
+            <button class="mode-btn" data-mode="grid" role="tab" aria-selected="false"><span>▦</span><span>Grid</span></button>
+            <button class="mode-btn" data-mode="bivariate" role="tab" aria-selected="false"><span>◉</span><span>Bivariante</span></button>
+          </div>
+          <p id="modeHint" class="hint">Puntos municipales coloreados por densidad.</p>
+        </div>
+
         <div class="panel">
           <span class="label">Top densidad</span>
           <ol id="topList"></ol>
@@ -423,7 +494,7 @@
         <span class="label">Fuentes</span>
         <p>INE: tabla 68065, <em>Población según municipio y sexo</em>, Censo anual de población 2021-2025.</p>
         <p>IGN/CNIG: listado geográfico de municipios con superficie y enlace cartográfico de centro municipal.</p>
-        <p>Mapa base: OpenStreetMap y CARTO raster tiles de alta densidad.</p>
+        <p>Delimitaciones: TopoJSON municipal de es-atlas, generado desde datos IGN. Mapa base: OpenStreetMap y CARTO raster tiles de alta densidad.</p>
         <p><a href="https://www.ine.es/jaxiT3/Tabla.htm?t=68065" target="_blank" rel="noreferrer">Ver tabla INE</a> · <a href="https://www.ign.es/web/ane-datos-geograficos" target="_blank" rel="noreferrer">Ver datos IGN</a></p>
       </section>
     </aside>
@@ -445,6 +516,25 @@
 <script>
 const INE_CSV = "https://www.ine.es/jaxiT3/files/t/csv_bdsc/68065.csv";
 const IGN_XLSX = "https://www.ign.es/resources/ane/Informacion_Geografica_Destacada/IGN_INFOGEO_MUNICIPIOS.xlsx";
+const MUNICIPAL_TOPOJSON = "https://unpkg.com/es-atlas@0.6.0/es/municipalities.json";
+
+const MODE_HINTS = {
+  points: "Puntos municipales coloreados por densidad.",
+  choropleth: "Municipios reales coloreados por densidad, con delimitaciones visibles.",
+  heatmap: "Superficie continua estimada desde los centros municipales, sin círculos.",
+  cubes: "Columnas cuadradas con altura logarítmica normalizada por densidad.",
+  grid: "Celdas agregadas para leer patrones territoriales sin ruido municipal.",
+  bivariate: "Densidad en color y población total en tamaño/borde."
+};
+
+const MODE_LAYERS = {
+  points: ["municipal-points"],
+  choropleth: ["municipal-fill", "municipal-borders"],
+  heatmap: ["municipal-heat"],
+  cubes: ["municipal-cubes"],
+  grid: ["grid-fill", "grid-line"],
+  bivariate: ["municipal-bivariate"]
+};
 
 const MAP_STYLE = {
   version: 8,
@@ -490,9 +580,13 @@ map.addControl(new maplibregl.AttributionControl({ compact: true }), "bottom-rig
 
 const mapReady = new Promise(resolve => map.on("load", resolve));
 let municipalities = [];
+let municipalitiesByCode = new Map();
 let selectedCode = "";
 let hoveredCode = "";
 let maxDensity = 1;
+let maxPopulation = 1;
+let activeMode = "points";
+let polygonDataPromise = null;
 
 function setStatus(html) {
   document.getElementById("status").innerHTML = html;
@@ -570,6 +664,10 @@ function extractCenterFromIgnUrl(url) {
 
 function densityScore(density) {
   return Math.max(0, Math.min(1, Math.log10(density + 1) / Math.log10(maxDensity + 1)));
+}
+
+function populationScore(population) {
+  return Math.max(0, Math.min(1, Math.log10(population + 1) / Math.log10(maxPopulation + 1)));
 }
 
 async function fetchText(url, encoding = "utf-8") {
@@ -678,7 +776,8 @@ function toGeoJson(data) {
       geometry: { type: "Point", coordinates: [m.lon, m.lat] },
       properties: {
         ...m,
-        densityScore: densityScore(m.density)
+        densityScore: densityScore(m.density),
+        populationScore: populationScore(m.population)
       }
     }))
   };
@@ -695,7 +794,154 @@ function popupHtml(m) {
   `;
 }
 
-function drawPoints(data) {
+function squareAround(lon, lat, km = 4) {
+  const latDelta = km / 111;
+  const lonDelta = km / (111 * Math.max(0.25, Math.cos(lat * Math.PI / 180)));
+  return [[
+    [lon - lonDelta, lat - latDelta],
+    [lon + lonDelta, lat - latDelta],
+    [lon + lonDelta, lat + latDelta],
+    [lon - lonDelta, lat + latDelta],
+    [lon - lonDelta, lat - latDelta]
+  ]];
+}
+
+function buildCubeGeoJson(data) {
+  return {
+    type: "FeatureCollection",
+    features: data.map(m => {
+      const dScore = densityScore(m.density);
+      return {
+        type: "Feature",
+        id: m.code,
+        geometry: { type: "Polygon", coordinates: squareAround(m.lon, m.lat, 2.2 + populationScore(m.population) * 2.8) },
+        properties: {
+          ...m,
+          densityScore: dScore,
+          populationScore: populationScore(m.population),
+          height: Math.round(1000 + Math.pow(dScore, 1.45) * 60000)
+        }
+      };
+    })
+  };
+}
+
+function buildGridGeoJson(data) {
+  const cell = 0.42;
+  const cells = new Map();
+  for (const m of data) {
+    const x = Math.floor(m.lon / cell);
+    const y = Math.floor(m.lat / cell);
+    const key = `${x}:${y}`;
+    const prev = cells.get(key) || { x, y, population: 0, area: 0, count: 0 };
+    prev.population += m.population;
+    prev.area += m.area;
+    prev.count += 1;
+    cells.set(key, prev);
+  }
+
+  return {
+    type: "FeatureCollection",
+    features: [...cells.values()].filter(c => c.area > 0).map(c => {
+      const west = c.x * cell;
+      const south = c.y * cell;
+      const density = c.population / c.area;
+      return {
+        type: "Feature",
+        geometry: {
+          type: "Polygon",
+          coordinates: [[
+            [west, south],
+            [west + cell, south],
+            [west + cell, south + cell],
+            [west, south + cell],
+            [west, south]
+          ]]
+        },
+        properties: {
+          code: `${c.x}:${c.y}`,
+          name: `${c.count} municipios`,
+          province: "Celda agregada",
+          population: Math.round(c.population),
+          area: c.area,
+          density,
+          densityScore: densityScore(density),
+          count: c.count
+        }
+      };
+    })
+  };
+}
+
+async function loadMunicipalPolygons() {
+  if (polygonDataPromise) return polygonDataPromise;
+  polygonDataPromise = (async () => {
+    const res = await fetch(MUNICIPAL_TOPOJSON, { mode: "cors" });
+    if (!res.ok) throw new Error(`HTTP ${res.status} al cargar delimitaciones municipales`);
+    const topo = await res.json();
+    const geo = topojson.feature(topo, topo.objects.municipalities);
+    const features = geo.features.map(feature => {
+      const code = String(feature.id || feature.properties?.id || "").padStart(5, "0");
+      const m = municipalitiesByCode.get(code);
+      if (!m) return null;
+      return {
+        ...feature,
+        id: code,
+        properties: {
+          ...feature.properties,
+          ...m,
+          densityScore: densityScore(m.density),
+          populationScore: populationScore(m.population)
+        }
+      };
+    }).filter(Boolean);
+    return { type: "FeatureCollection", features };
+  })();
+  return polygonDataPromise;
+}
+
+function setLayerVisibility(ids, visibility) {
+  for (const id of ids) {
+    if (map.getLayer(id)) map.setLayoutProperty(id, "visibility", visibility);
+  }
+}
+
+function colorExpression() {
+  return ["interpolate", ["linear"], ["get", "densityScore"],
+    0, "#f8fff4",
+    0.32, "#c6f27a",
+    0.52, "#ffd857",
+    0.72, "#f17745",
+    1, "#c71f28"
+  ];
+}
+
+function getFeatureMunicipality(properties) {
+  if (!properties) return null;
+  if (properties.code && municipalitiesByCode.has(properties.code)) return municipalitiesByCode.get(properties.code);
+  return {
+    code: properties.code || "",
+    name: properties.name || "Celda agregada",
+    province: properties.province || "-",
+    population: Number(properties.population),
+    area: Number(properties.area),
+    density: Number(properties.density),
+    lon: Number(properties.lon),
+    lat: Number(properties.lat)
+  };
+}
+
+function registerPopupLayer(layerId) {
+  map.on("mouseenter", layerId, () => { map.getCanvas().style.cursor = "pointer"; });
+  map.on("mouseleave", layerId, () => { map.getCanvas().style.cursor = ""; });
+  map.on("click", layerId, e => {
+    const props = e.features?.[0]?.properties;
+    const m = getFeatureMunicipality(props);
+    if (m) selectMunicipality(m, { openPopup: true, fly: false, lngLat: e.lngLat });
+  });
+}
+
+function drawCoreLayers(data) {
   const sourceData = toGeoJson(data);
   if (map.getSource("municipalities")) {
     map.getSource("municipalities").setData(sourceData);
@@ -709,6 +955,26 @@ function drawPoints(data) {
   });
 
   map.addLayer({
+    id: "municipal-heat",
+    type: "heatmap",
+    source: "municipalities",
+    layout: { visibility: "none" },
+    paint: {
+      "heatmap-weight": ["interpolate", ["linear"], ["get", "densityScore"], 0, 0.06, 1, 1],
+      "heatmap-intensity": ["interpolate", ["linear"], ["zoom"], 4, 0.75, 9, 1.8],
+      "heatmap-radius": ["interpolate", ["linear"], ["zoom"], 4, 13, 8, 32, 11, 58],
+      "heatmap-opacity": 0.72,
+      "heatmap-color": ["interpolate", ["linear"], ["heatmap-density"],
+        0, "rgba(248,255,244,0)",
+        0.2, "#d5f7a6",
+        0.42, "#ffd857",
+        0.68, "#f17745",
+        1, "#c71f28"
+      ]
+    }
+  });
+
+  map.addLayer({
     id: "municipal-points",
     type: "circle",
     source: "municipalities",
@@ -718,6 +984,20 @@ function drawPoints(data) {
       "circle-opacity": 0.82,
       "circle-stroke-color": "rgba(19, 27, 23, 0.55)",
       "circle-stroke-width": ["case", ["boolean", ["feature-state", "hover"], false], 2.2, 0.55]
+    }
+  });
+
+  map.addLayer({
+    id: "municipal-bivariate",
+    type: "circle",
+    source: "municipalities",
+    layout: { visibility: "none" },
+    paint: {
+      "circle-radius": ["interpolate", ["linear"], ["get", "populationScore"], 0, 3, 0.45, 8, 1, 20],
+      "circle-color": colorExpression(),
+      "circle-opacity": ["interpolate", ["linear"], ["get", "populationScore"], 0, 0.42, 1, 0.88],
+      "circle-stroke-color": "#16241e",
+      "circle-stroke-width": ["interpolate", ["linear"], ["get", "populationScore"], 0, 0.4, 1, 3.4]
     }
   });
 
@@ -763,6 +1043,167 @@ function drawPoints(data) {
     const municipality = municipalities.find(m => m.code === props.code);
     if (municipality) selectMunicipality(municipality, { openPopup: true, fly: false, lngLat: e.lngLat });
   });
+
+  registerPopupLayer("municipal-bivariate");
+}
+
+async function ensurePolygonLayers() {
+  if (map.getSource("municipal-polygons")) return;
+  setStatus("Cargando delimitaciones municipales...");
+  const polygonData = await loadMunicipalPolygons();
+  if (polygonData.features.length < 8000) {
+    throw new Error(`Solo se han enriquecido ${polygonData.features.length} geometrías municipales.`);
+  }
+
+  map.addSource("municipal-polygons", {
+    type: "geojson",
+    data: polygonData,
+    promoteId: "code"
+  });
+
+  map.addLayer({
+    id: "municipal-fill",
+    type: "fill",
+    source: "municipal-polygons",
+    layout: { visibility: "none" },
+    paint: {
+      "fill-color": colorExpression(),
+      "fill-opacity": ["case", ["boolean", ["feature-state", "hover"], false], 0.86, 0.62]
+    }
+  }, "municipal-heat");
+
+  map.addLayer({
+    id: "municipal-borders",
+    type: "line",
+    source: "municipal-polygons",
+    layout: { visibility: "none" },
+    paint: {
+      "line-color": "rgba(17, 23, 20, 0.42)",
+      "line-width": ["interpolate", ["linear"], ["zoom"], 4, 0.25, 9, 0.85, 12, 1.6]
+    }
+  });
+
+  map.addLayer({
+    id: "municipal-selected-fill",
+    type: "line",
+    source: "municipal-polygons",
+    filter: ["==", ["get", "code"], ""],
+    paint: {
+      "line-color": "#2359d6",
+      "line-width": 3
+    }
+  });
+
+  map.on("mousemove", "municipal-fill", e => {
+    const feature = e.features?.[0];
+    if (!feature) return;
+    const code = feature.properties.code;
+    if (hoveredCode && hoveredCode !== code && map.getSource("municipal-polygons")) {
+      map.setFeatureState({ source: "municipal-polygons", id: hoveredCode }, { hover: false });
+    }
+    hoveredCode = code;
+    map.setFeatureState({ source: "municipal-polygons", id: code }, { hover: true });
+  });
+  map.on("mouseleave", "municipal-fill", () => {
+    map.getCanvas().style.cursor = "";
+    if (hoveredCode && map.getSource("municipal-polygons")) {
+      map.setFeatureState({ source: "municipal-polygons", id: hoveredCode }, { hover: false });
+      hoveredCode = "";
+    }
+  });
+  registerPopupLayer("municipal-fill");
+}
+
+function ensureCubeLayers() {
+  if (map.getSource("municipal-cubes")) return;
+  map.addSource("municipal-cubes", {
+    type: "geojson",
+    data: buildCubeGeoJson(municipalities),
+    promoteId: "code"
+  });
+  map.addLayer({
+    id: "municipal-cubes",
+    type: "fill-extrusion",
+    source: "municipal-cubes",
+    layout: { visibility: "none" },
+    paint: {
+      "fill-extrusion-color": colorExpression(),
+      "fill-extrusion-height": ["get", "height"],
+      "fill-extrusion-base": 0,
+      "fill-extrusion-opacity": 0.78
+    }
+  });
+  registerPopupLayer("municipal-cubes");
+}
+
+function ensureGridLayers() {
+  if (map.getSource("density-grid")) return;
+  map.addSource("density-grid", {
+    type: "geojson",
+    data: buildGridGeoJson(municipalities)
+  });
+  map.addLayer({
+    id: "grid-fill",
+    type: "fill",
+    source: "density-grid",
+    layout: { visibility: "none" },
+    paint: {
+      "fill-color": colorExpression(),
+      "fill-opacity": ["interpolate", ["linear"], ["get", "densityScore"], 0, 0.18, 1, 0.78]
+    }
+  }, "municipal-heat");
+  map.addLayer({
+    id: "grid-line",
+    type: "line",
+    source: "density-grid",
+    layout: { visibility: "none" },
+    paint: {
+      "line-color": "rgba(17, 23, 20, 0.28)",
+      "line-width": 0.55
+    }
+  });
+  registerPopupLayer("grid-fill");
+}
+
+async function setMode(mode) {
+  activeMode = mode;
+  document.querySelectorAll(".mode-btn").forEach(btn => {
+    const active = btn.dataset.mode === mode;
+    btn.classList.toggle("is-active", active);
+    btn.setAttribute("aria-selected", String(active));
+  });
+  document.getElementById("modeHint").textContent = MODE_HINTS[mode];
+
+  if (mode === "choropleth") await ensurePolygonLayers();
+  if (mode === "cubes") ensureCubeLayers();
+  if (mode === "grid") ensureGridLayers();
+
+  for (const ids of Object.values(MODE_LAYERS)) setLayerVisibility(ids, "none");
+  setLayerVisibility(MODE_LAYERS[mode], "visible");
+  if (map.getLayer("municipal-selected-fill")) {
+    map.setLayoutProperty("municipal-selected-fill", "visibility", mode === "choropleth" ? "visible" : "none");
+  }
+
+  if (mode === "cubes") {
+    map.easeTo({ pitch: window.innerWidth < 620 ? 44 : 62, bearing: -18, duration: 650 });
+  } else if (mode === "heatmap") {
+    map.easeTo({ pitch: 18, bearing: 0, duration: 650 });
+  } else {
+    map.easeTo({ pitch: window.innerWidth < 620 ? 22 : 36, bearing: -8, duration: 650 });
+  }
+
+  setStatus(`Modo activo: <strong>${MODE_HINTS[mode]}</strong>`);
+}
+
+function setupModes() {
+  document.querySelectorAll(".mode-btn").forEach(btn => {
+    btn.addEventListener("click", () => {
+      setMode(btn.dataset.mode).catch(err => {
+        console.error(err);
+        setStatus(`<strong>Error:</strong> ${escapeHtml(err.message)}`);
+      });
+    });
+  });
 }
 
 function updateUI(data, period) {
@@ -783,18 +1224,19 @@ function updateUI(data, period) {
     });
   });
 
-  setStatus(`Datos cargados. <strong>${fmt(data.length)}</strong> municipios cruzados con coordenadas, superficie y poblacion.`);
+  setStatus(`Datos cargados. <strong>${fmt(data.length)}</strong> municipios cruzados con coordenadas, superficie y población.`);
 }
 
 function selectMunicipality(m, options = {}) {
   selectedCode = m.code;
-  map.setFilter("municipal-selected", ["==", ["get", "code"], selectedCode]);
+  if (map.getLayer("municipal-selected")) map.setFilter("municipal-selected", ["==", ["get", "code"], selectedCode]);
+  if (map.getLayer("municipal-selected-fill")) map.setFilter("municipal-selected-fill", ["==", ["get", "code"], selectedCode]);
 
   if (options.fly !== false) {
     map.flyTo({
       center: [m.lon, m.lat],
       zoom: Math.max(map.getZoom(), 9.2),
-      pitch: 46,
+      pitch: activeMode === "cubes" ? 62 : 46,
       bearing: -8,
       speed: 0.9,
       curve: 1.35,
@@ -824,6 +1266,7 @@ function setupSearch() {
       return;
     }
     hint.textContent = `${m.name}: ${fmt(m.density, 1)} hab/km2.`;
+    if (activeMode === "heatmap") setMode("points").catch(console.error);
     selectMunicipality(m, { openPopup: true, fly: true });
   };
   document.getElementById("searchBtn").addEventListener("click", go);
@@ -842,11 +1285,14 @@ function setupSearch() {
     }
 
     maxDensity = Math.max(...municipalities.map(d => d.density));
+    maxPopulation = Math.max(...municipalities.map(d => d.population));
+    municipalitiesByCode = new Map(municipalities.map(m => [m.code, m]));
     await mapReady;
     try { map.setProjection({ type: "globe" }); } catch (err) { console.warn("Globe projection unavailable", err); }
-    drawPoints(municipalities);
+    drawCoreLayers(municipalities);
     updateUI(municipalities, popData.period);
     setupSearch();
+    setupModes();
   } catch (err) {
     console.error(err);
     setStatus(`<strong>Error:</strong> ${escapeHtml(err.message)}`);
